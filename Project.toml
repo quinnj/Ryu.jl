@@ -4,3 +4,9 @@ uuid = "5e2e73ce-74d7-11e8-1b43-add1da556067"
 version = "0.1.0"
 
 [deps]
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
