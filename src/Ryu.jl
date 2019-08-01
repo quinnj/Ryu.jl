@@ -1,116 +1,122 @@
 module Ryu
 
-include("utils.jl")
 include("tables.jl")
+include("utils.jl")
 
-mutable struct Float{T}
-    mantissa::T
-    exponent::Int32
+const MANTISSA_MASK = 0x000fffffffffffff
+const EXP_MASK = 0x00000000000007ff
+
+function write(x::T) where {T <: Base.IEEEFloat}
+    buf, pos = write(x, zeros(UInt8, 25), 1)
+    return String(buf[1:pos-1])
 end
 
-@inline function mulShift(m::UInt64, mul, j)
-    @inbounds b0 = UInt128(m) * mul[1]
-    @inbounds b2 = UInt128(m) * mul[2]
-    return (((b0 >> 64) + b2) >> (j - 64)) % UInt64
+function writefixed(x::T, precision) where {T <: Base.IEEEFloat}
+    buf, pos = writefixed(x, precision, zeros(UInt8, 2000), 1)
+    return String(buf[1:pos-1])
 end
 
-@inline function mulShift(m::UInt32, factor, shift)
-    factorLo = factor % UInt32
-    factorHi = (factor >> 32) % UInt32
-    bits0 = UInt64(m) * factorLo
-    bits1 = UInt64(m) * factorHi
-    sum = (bits0 >> 32) + bits1
-    shiftedSum = sum >> (shift - 32)
-    return shiftedSum % UInt32
+function writex(x, buf, pos)
+    write(x, buf, pos)
+    return
 end
 
-@inline function tofloat(::Type{T}, ieeeMantissa, ieeeExponent) where {T}
-    if ieeeExponent == 0
-        e2 = (1 - bias(T) - mantissabits(T) - 2) % Int32
-        m2 = ieeeMantissa
-    else
-        e2 = (ieeeExponent - bias(T) - mantissabits(T) - 2) % Int32
-        m2 = (oftype(ieeeMantissa, 1) << mantissabits(T)) | ieeeMantissa
-    end
-    even = (m2 & 1) == 0
-    acceptBounds = even
+function writex(x, prec, buf, pos)
+    writefixed(x, prec, buf, pos)
+    return
+end
 
-    mv = oftype(m2, 4) * m2
-    mmShift = ieeeMantissa != 0 || ieeeExponent <= 1
-
-    vmIsTrailingZeros = false
-    vrIsTrailingZeros = false
-    lastRemovedDigit = 0x00
-    if e2 >= 0
-        q = log10pow2(e2) - (T == Float64 ? (e2 > 3) : false)
-        e10 = Core.bitcast(Int32, q)
-        k = pow5_inv_bitcount(T) + pow5bits(e10) - 1
-        i = -e2 + e10 + k
-        mul = pow5invsplit(T, q)
-        vr = mulShift(mv, mul, i)
-        vp = mulShift(mv + oftype(mv, 2), mul, i)
-        vm = mulShift(mv - oftype(mv, 1) - mmShift, mul, i)
-        if T == Float32
-            if q != 0 && div(vp - oftype(vp, 1), 10) <= div(vm, 10)
-                l = pow5_inv_bitcount(T) + pow5bits(e10 - Int32(1)) - 1
-                lastRemovedDigit = (mulShift(mv, pow5invsplit(T, q - 1), -e2 + Int32(q) - 1 + l) % 10) % UInt8
-            end
+@inline function write(v::T, buf::Vector{UInt8}, pos) where {T}
+    x = Float64(v)
+    neg = signbit(x)
+    # special cases
+    @inbounds if x == 0
+        if neg
+            buf[pos] = UInt8('-')
         end
-        if q <= qinvbound(T)
-            if T == Float64
-                mvMod5 = (mv % UInt32) - UInt32(5) * (div(mv, 5) % UInt32)
-            else
-                mvMod5 = mv % 5
-            end
-            if mvMod5 == 0
-                vrIsTrailingZeros = multipleOfPowerOf5(mv, q)
-            elseif acceptBounds
-                vmIsTrailingZeros = multipleOfPowerOf5(mv - 1 - mmShift, q)
-            else
-                vp -= multipleOfPowerOf5(mv + 2, q)
-            end
+        buf[pos + neg] = UInt8('0')
+        buf[pos + neg + 1] = UInt8('e')
+        buf[pos + neg + 2] = UInt8('0')
+        return buf, pos + neg + 3
+    elseif isnan(x)
+        buf[pos] = UInt8('N')
+        buf[pos + 1] = UInt8('a')
+        buf[pos + 2] = UInt8('N')
+        return buf, pos + 3
+    elseif !isfinite(x)
+        if neg
+            buf[pos] = UInt8('-')
         end
-    else
-        q = log10pow5(-e2) - (T == Float64 ? (-e2 > 1) : false)
-        e10 = Core.bitcast(Int32, q) + e2
-        i = -e2 - Core.bitcast(Int32, q)
-        k = pow5bits(i) - pow5_bitcount(T)
-        j = q - k
-        mul = pow5split(T, i)
-        vr = mulShift(mv, mul, j)
-        vp = mulShift(mv + oftype(mv, 2), mul, j)
-        vm = mulShift(mv - oftype(mv, 1) - mmShift, mul, j)
-        if T == Float32
-            if q != 0 && div(vp - oftype(vp, 1), 10) <= div(vm, 10)
-                j = q - 1 - (pow5bits(i + Int32(1)) - pow5_bitcount(T))
-                lastRemovedDigit = (mulShift(mv, pow5split(T, i + 1), j) % 10) % UInt8
-            end
-        end
-        if q <= 1
-            vrIsTrailingZeros = true
-            if acceptBounds
-                vmIsTrailingZeros = mmShift == 1
-            else
-                vp -= 1
-            end
-        elseif q < qbound(T)
-            vrIsTrailingZeros = multipleOfPowerOf2(mv, q - (T == Float32))
-        end
+        buf[pos + neg] = UInt8('I')
+        buf[pos + neg + 1] = UInt8('n')
+        buf[pos + neg + 2] = UInt8('f')
+        return buf, pos + neg + 3
     end
 
-    removed = 0
-    if vmIsTrailingZeros || vrIsTrailingZeros
-        if T == Float32
-            while div(vp, 10) > div(vm, 10)
-                vmIsTrailingZeros &= vm % 10 == 0
-                vrIsTrailingZeros &= lastRemovedDigit == 0
-                lastRemovedDigit = (vr % 10) % UInt8
-                vr = div(vr, 10)
-                vp = div(vp, 10)
-                vm = div(vm, 10)
-                removed += 1
+    bits = Core.bitcast(UInt64, x)
+    mant = bits & MANTISSA_MASK
+    exp = Int((bits >> 52) & EXP_MASK)
+
+    m2 = (1 << 52) | mant
+    e2 = exp - 1023 - 52
+    fraction = m2 & ((1 << -e2) - 1)
+    if e2 > 0 || e2 < -52 || fraction != 0
+        if exp == 0
+            e2 = 1 - 1023 - 52 - 2
+            m2 = mant
+        else
+            e2 -= 2
+        end
+        even = (m2 & 1) == 0
+        mv = 4 * m2
+        mp = mv + 2
+        mmShift = mant != 0 || exp <= 1
+        mm = mv - 1 - mmShift
+        vmIsTrailingZeros = false
+        vrIsTrailingZeros = false
+        lastRemovedDigit = 0x00
+        if e2 >= 0
+            q = log10pow2(e2) - (e2 > 3)
+            e10 = q
+            k = 122 + pow5bits(q) - 1
+            i = -e2 + q + k
+            @inbounds mula, mulb = DOUBLE_POW5_INV_SPLIT[q + 1]
+            vr = mulshift(mv, mula, mulb, i)
+            vp = mulshift(mp, mula, mulb, i)
+            vm = mulshift(mm, mula, mulb, i)
+            if q <= 21
+                if ((mv % UInt32) - 5 * div(mv, 5)) == 0
+                    vrIsTrailingZeros = pow5(mv, q)
+                elseif even
+                    vmIsTrailingZeros = pow5(mm, q)
+                else
+                    vp -= pow5(mp, q)
+                end
             end
         else
+            q = log10pow5(-e2) - (-e2 > 1)
+            e10 = q + e2
+            i = -e2 - q
+            k = pow5bits(i) - 121
+            j = q - k
+            @inbounds mula, mulb = DOUBLE_POW5_SPLIT[i + 1]
+            vr = mulshift(mv, mula, mulb, j)
+            vp = mulshift(mp, mula, mulb, j)
+            vm = mulshift(mm, mula, mulb, j)
+            if q <= 1
+                vrIsTrailingZeros = true
+                if even
+                    vmIsTrailingZeros = mmShift
+                else
+                    vp -= 1
+                end
+            elseif q < 63
+                vrIsTrailingZeros = pow2(mv, q)
+            end
+        end
+        # @show Int(vr)
+        removed = 0
+        if vmIsTrailingZeros || vrIsTrailingZeros
             while true
                 vpDiv10 = div(vp, 10)
                 vmDiv10 = div(vm, 10)
@@ -126,18 +132,7 @@ end
                 vm = vmDiv10
                 removed += 1
             end
-        end
-        if vmIsTrailingZeros
-            if T == Float32
-                while vm % 10 == 0
-                    vrIsTrailingZeros &= lastRemovedDigit == 0
-                    lastRemovedDigit = (vr % 10) % UInt8
-                    vr = div(vr, 10)
-                    vp = div(vp, 10)
-                    vm = div(vm, 10)
-                    removed += 1
-                end
-            else
+            if vmIsTrailingZeros
                 while true
                     vmDiv10 = div(vm, 10)
                     vmMod10 = (vm % UInt32) - UInt32(10) * (vmDiv10 % UInt32)
@@ -153,21 +148,10 @@ end
                     removed += 1
                 end
             end
-        end
-        if vrIsTrailingZeros && lastRemovedDigit == 5 && vr % 2 == 0
-            lastRemovedDigit = 4
-        end
-        output = vr + ((vr == vm && (!acceptBounds || !vmIsTrailingZeros)) || lastRemovedDigit >= 5)
-    else
-        if T == Float32
-            while div(vp, 10) > div(vm, 10)
-                lastRemovedDigit = (vr % 10) % UInt8
-                vr = div(vr, 10)
-                vp = div(vp, 10)
-                vm = div(vm, 10)
-                removed += 1
+            if vrIsTrailingZeros && lastRemovedDigit == 5 && vr % 2 == 0
+                lastRemovedDigit = UInt8(4)
             end
-            output = vr + (vr == vm || lastRemovedDigit >= 5)
+            output = vr + ((vr == vm && (!even || !vmIsTrailingZeros)) || lastRemovedDigit >= 5)
         else
             roundUp = false
             vpDiv100 = div(vp, 100)
@@ -182,6 +166,7 @@ end
                 removed += 2
             end
             while true
+                # @show Int(vr)
                 vpDiv10 = div(vp, 10)
                 vmDiv10 = div(vm, 10)
                 vpDiv10 <= vmDiv10 && break
@@ -195,57 +180,59 @@ end
             end
             output = vr + (vr == vm || roundUp)
         end
+        nexp = e10 + removed
+    else
+        output = m2 >> -e2
+        nexp = 0
+        while true
+            q = div(output, 10)
+            r = (output % UInt32) - UInt32(10) * (q % UInt32)
+            r != 0 && break
+            output = q
+            nexp += 1
+        end
     end
-    exp = Int32(e10 + removed)
-    return Float(output, exp)
-end
 
-@inline function tochars(buf, pos, v::Float{T}, sign) where {T}
-    if sign > 0
+    if neg
         @inbounds buf[pos] = UInt8('-')
         pos += 1
     end
-
-    output = v.mantissa
+    # @show output
     olength = decimallength(output)
 
     i = 0
-    if T == UInt64
-        if (output >> 32) != 0
-            q = output ÷ 100000000
-            output2 = (output % UInt32) - UInt32(100000000) * (q % UInt32)
-            output = q
+    if (output >> 32) != 0
+        q = output ÷ 100000000
+        output2 = (output % UInt32) - UInt32(100000000) * (q % UInt32)
+        output = q
 
-            c = output2 % 10000
-            output2 = div(output2, 10000)
-            d = output2 % 10000
-            c0 = (c % 100) << 1
-            c1 = (c ÷ 100) << 1
-            d0 = (d % 100) << 1
-            d1 = (d ÷ 100) << 1
-            copyto!(buf, pos + olength - 1, DIGIT_TABLE, c0 + 1, 2)
-            copyto!(buf, pos + olength - 3, DIGIT_TABLE, c1 + 1, 2)
-            copyto!(buf, pos + olength - 5, DIGIT_TABLE, d0 + 1, 2)
-            copyto!(buf, pos + olength - 7, DIGIT_TABLE, d1 + 1, 2)
-            i += 8
-        end
-        output2 = output % UInt32
-    else
-        output2 = output
+        c = output2 % 10000
+        output2 = div(output2, 10000)
+        d = output2 % 10000
+        c0 = (c % 100) << 1
+        c1 = (c ÷ 100) << 1
+        d0 = (d % 100) << 1
+        d1 = (d ÷ 100) << 1
+        unsafe_copyto!(buf, pos + olength - 1, DIGIT_TABLE, c0 + 1, 2)
+        unsafe_copyto!(buf, pos + olength - 3, DIGIT_TABLE, c1 + 1, 2)
+        unsafe_copyto!(buf, pos + olength - 5, DIGIT_TABLE, d0 + 1, 2)
+        unsafe_copyto!(buf, pos + olength - 7, DIGIT_TABLE, d1 + 1, 2)
+        i += 8
     end
+    output2 = output % UInt32
     while output2 >= 10000
         c = output2 % 10000
         output2 = div(output2, 10000)
         c0 = (c % 100) << 1
         c1 = (c ÷ 100) << 1
-        copyto!(buf, pos + olength - i - 1, DIGIT_TABLE, c0 + 1, 2)
-        copyto!(buf, pos + olength - i - 3, DIGIT_TABLE, c1 + 1, 2)
+        unsafe_copyto!(buf, pos + olength - i - 1, DIGIT_TABLE, c0 + 1, 2)
+        unsafe_copyto!(buf, pos + olength - i - 3, DIGIT_TABLE, c1 + 1, 2)
         i += 4
     end
     if output2 >= 100
         c = (output2 % 100) << 1
         output2 = div(output2, 100)
-        copyto!(buf, pos + olength - i - 1, DIGIT_TABLE, c + 1, 2)
+        unsafe_copyto!(buf, pos + olength - i - 1, DIGIT_TABLE, c + 1, 2)
         i += 2
     end
     if output2 >= 10
@@ -253,7 +240,7 @@ end
         #=@inbounds=# buf[pos + olength - i] = DIGIT_TABLE[c + 2]
         #=@inbounds=# buf[pos] = DIGIT_TABLE[c + 1]
     else
-        #=@inbounds=# buf[pos] = UInt8('0' + output2)
+        #=@inbounds=# buf[pos] = UInt8('0') + (output2 % UInt8)
     end
 
     if olength > 1
@@ -265,77 +252,207 @@ end
 
     #=@inbounds=# buf[pos] = UInt8('e')
     pos += 1
-    exp = v.exponent + olength - 1
-    if exp < 0
+    exp2 = nexp + olength - 1
+    if exp2 < 0
         #=@inbounds=# buf[pos] = UInt8('-')
         pos += 1
-        exp = -exp
+        exp2 = -exp2
     end
 
-    if exp >= 100
-        c = exp % 10
-        copyto!(buf, pos, DIGIT_TABLE, 2 * div(exp, 10) + 1, 2)
-        #=@inbounds=# buf[pos + 2] = UInt8('0' + c)
+    if exp2 >= 100
+        c = exp2 % 10
+        unsafe_copyto!(buf, pos, DIGIT_TABLE, 2 * div(exp2, 10) + 1, 2)
+        #=@inbounds=# buf[pos + 2] = UInt8('0') + (c % UInt8)
         pos += 3
-    elseif exp >= 10
-        copyto!(buf, pos, DIGIT_TABLE, 2 * exp + 1, 2)
+    elseif exp2 >= 10
+        unsafe_copyto!(buf, pos, DIGIT_TABLE, 2 * exp2 + 1, 2)
         pos += 2
     else
-        #=@inbounds=# buf[pos] = UInt8('0' + exp)
+        #=@inbounds=# buf[pos] = UInt8('0') + (exp2 % UInt8)
         pos += 1
     end
 
     return buf, pos
 end
 
-function write(x::T) where {T <: Base.IEEEFloat}
-    buf, pos = write(x, zeros(UInt8, 25), 1)
-    return String(buf[1:pos-1])
-end
-
-function write(x::T, buf::Vector{UInt8}, pos) where {T <: Base.IEEEFloat}
-    bits = uint(x)
-    ieeeSign = signbit(x)
-    ieeeMantissa = bits & ((oftype(bits, 1) << mantissabits(T)) - oftype(bits, 1))
-    ieeeExponent = (bits >> mantissabits(T)) & ((oftype(bits, 1) << exponentbits(T)) - oftype(bits, 1))
-
+@inline function writefixed(v::T, precision, buf, pos) where {T <: Base.IEEEFloat}
+    x = Float64(v)
+    neg = signbit(x)
     # special cases
-    if ieeeExponent == ((oftype(bits, 1) << exponentbits(T)) - oftype(bits, 1)) || (ieeeExponent == 0 && ieeeMantissa == 0)
-        if ieeeMantissa > 0
-            copyto!(buf, pos, b"NaN", 1, 3)
-            return buf, pos + 3
-        end
-        if ieeeSign > 0
-            @inbounds buf[pos] = UInt8('-')
+    @inbounds if x == 0
+        if neg
+            buf[pos] = UInt8('-')
             pos += 1
         end
-        if ieeeExponent > 0
-            copyto!(buf, pos, b"Inf", 1, 3)
-            return buf, pos + 3
+        buf[pos] = UInt8('0')
+        pos += 1
+        if precision > 0
+            buf[pos] = UInt8('.')
+            pos += 1
+            for _ = 1:precision
+                buf[pos] = UInt8('0')
+                pos += 1
+            end
         end
-        copyto!(buf, pos, b"0.0", 1, 3)
+        return buf, pos
+    elseif isnan(x)
+        buf[pos] = UInt8('N')
+        buf[pos + 1] = UInt8('a')
+        buf[pos + 2] = UInt8('N')
         return buf, pos + 3
+    elseif !isfinite(x)
+        if neg
+            buf[pos] = UInt8('-')
+        end
+        buf[pos + neg] = UInt8('I')
+        buf[pos + neg + 1] = UInt8('n')
+        buf[pos + neg + 2] = UInt8('f')
+        return buf, pos + neg + 3
     end
 
-    m2 = (oftype(bits, 1) << mantissabits(T)) | ieeeMantissa
-    e2 = ieeeExponent - bias(T) - mantissabits(T)
-    mask = (oftype(bits, 1) << -e2) - 1
-    fraction = m2 & mask
-    if e2 > 0 || e2 < -52 || fraction != 0
-        v = tofloat(T, ieeeMantissa, ieeeExponent)
+    bits = Core.bitcast(UInt64, x)
+    mant = bits & MANTISSA_MASK
+    exp = Int((bits >> 52) & EXP_MASK)
+
+    if exp == 0
+        e2 = 1 - 1023 - 52
+        m2 = mant
     else
-        # small int case
-        v = Float(m2 >> -e2, Int32(0))
-        while true
-            q = div(v.mantissa, 10)
-            r = (v.mantissa % UInt32) - UInt32(10) * (q % UInt32)
-            r != 0 && break
-            v.mantissa = q
-            v.exponent += 1
+        e2 = exp - 1023 - 52
+        m2 = (1 << 52) | mant
+    end
+    nonzero = false
+    if neg
+        buf[pos] = UInt8('-')
+        pos += 1
+    end
+    if e2 >= -52
+        idx = e2 < 0 ? 0 : indexforexp(e2)
+        p10bits = pow10bitsforindex(idx)
+        len = lengthforindex(idx)
+        i = len - 1
+        while i >= 0
+            j = p10bits - e2
+            #=@inbounds=# mula, mulb, mulc = POW10_SPLIT[POW10_OFFSET[idx + 1] + i + 1]
+            digits = mulshiftmod1e9(m2 << 8, mula, mulb, mulc, j + 8)
+            if nonzero
+                pos = append_nine_digits(digits, buf, pos)
+            elseif digits != 0
+                olength = decimallength(digits)
+                pos = append_n_digits(olength, digits, buf, pos)
+                nonzero = true
+            end
+            i -= 1
         end
     end
-
-    return tochars(buf, pos, v, ieeeSign)
+    if !nonzero
+        buf[pos] = UInt8('0')
+        pos += 1
+    end
+    if precision > 0
+        buf[pos] = UInt8('.')
+        pos += 1
+    end
+    if e2 < 0
+        idx = div(-e2, 16)
+        blocks = div(precision, 9) + 1
+        roundUp = 0
+        i = 0
+        if blocks <= MIN_BLOCK_2[idx + 1]
+            i = blocks
+            for _ = 1:precision
+                buf[pos] = UInt8('0')
+                pos += 1
+            end
+        elseif i < MIN_BLOCK_2[idx + 1]
+            i = MIN_BLOCK_2[idx + 1]
+            for _ = 1:(9 * i)
+                buf[pos] = UInt8('0')
+                pos += 1
+            end
+        end
+        while i < blocks
+            j = 120 + (-e2 - 16 * idx)
+            p = POW10_OFFSET_2[idx + 1] + UInt32(i) - MIN_BLOCK_2[idx + 1]
+            # @show i
+            # @show j
+            # @show Int(p)
+            if p >= POW10_OFFSET_2[idx + 2]
+                for _ = 1:(precision - 9 * i)
+                    buf[pos] = UInt8('0')
+                    pos += 1
+                end
+                break
+            end
+            #=@inbounds=# mula, mulb, mulc = POW10_SPLIT_2[p + 1]
+            digits = mulshiftmod1e9(m2 << 8, mula, mulb, mulc, j + 8)
+            # @show Int(digits)
+            if i < blocks - 1
+                pos = append_nine_digits(digits, buf, pos)
+            else
+                maximum = precision - 9 * i
+                lastDigit = 0
+                k = 0
+                while k < 9 - maximum
+                    # global digits, lastDigit, k
+                    lastDigit = digits % 10
+                    digits = div(digits, 10)
+                    k += 1
+                end
+                if lastDigit != 5
+                    roundUp = lastDigit > 5
+                else
+                    requiredTwos = -e2 - precision - 1
+                    trailingZeros = requiredTwos <= 0 || (requiredTwos < 60 && pow2(m2, requiredTwos))
+                    roundUp = trailingZeros ? 2 : 1
+                end
+                if maximum > 0
+                    pos = append_c_digits(maximum, digits, buf, pos)
+                end
+                break
+            end
+            i += 1
+            # @show String(buf[1:pos])
+        end
+        if roundUp != 0
+            roundPos = pos
+            dotPos = 1
+            while true
+                roundPos -= 1
+                if roundPos == 0 || (buf[roundPos] == UInt8('-'))
+                    buf[roundPos + 1] = UInt8('1')
+                    if dotPos > 1
+                        buf[dotPos] = UInt8('0')
+                        buf[dotPos + 1] = UInt8('.')
+                    end
+                    buf[pos] = UInt8('0')
+                    pos += 1
+                    break
+                end
+                c = roundPos > 0 ? buf[roundPos] : 0x00
+                if c == UInt8('.')
+                    dotPos = roundPos
+                    continue
+                elseif c == UInt8('9')
+                    buf[roundPos] = UInt8('0')
+                    roundUp = 1
+                    continue
+                else
+                    if roundUp == 2 && UInt8(c) % 2 == 0
+                        break
+                    end
+                    buf[roundPos] = c + 1
+                    break
+                end
+            end
+        end
+    else
+        for _ = 1:precision
+            buf[pos] = UInt8('0')
+            pos += 1
+        end
+    end
+    return buf, pos
 end
 
 end # module

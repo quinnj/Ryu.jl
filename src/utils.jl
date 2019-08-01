@@ -38,45 +38,28 @@ pow5split(::Type{Float16}, i) = 0 # TODO!!
 pow5split(::Type{Float32}, i) = FLOAT_POW5_SPLIT[i + 1]
 pow5split(::Type{Float64}, i) = DOUBLE_POW5_SPLIT[i + 1]
 
-# Returns floor(log_10(2^e)).
-@inline function log10pow2(e)
-    # The first value this approximation fails for is 2^1651 which is just greater than 10^297.
-    return (Core.bitcast(UInt32, e) * UInt32(78913)) >> 18
-end
+log10pow2(e) = (e * 78913) >> 18
+log10pow5(e) = (e * 732923) >> 20
+pow5bits(e) = ((e * 1217359) >> 19) + 1
+mulshift(m, mula, mulb, j) = ((((UInt128(m) * mula) >> 64) + UInt128(m) * mulb) >> (j - 64)) % UInt64
+indexforexp(e) = div(e + 15, 16)
+pow10bitsforindex(idx) = 16 * idx + 120
+lengthforindex(idx) = div(log10pow2(16 * idx) + 1 + 16 + 8, 9)
 
-@inline function log10pow5(e)
-    return ((e % UInt32) * UInt32(732923)) >> 20
-end
-
-# Returns e == 0 ? 1 : ceil(log_2(5^e)).
-@inline function pow5bits(e::Int32)::Int32
-    # This approximation works up to the point that the multiplication overflows at e = 3529.
-    # If the multiplication were done in 64 bits, it would fail at 5^4004 which is just greater
-    # than 2^9297.
-    return Core.bitcast(Int32, ((Core.bitcast(UInt32, e) * UInt32(1217359)) >> 19) + UInt32(1))
-end
-
-@inline function pow5factor(value::T) where {T}
+@inline function pow5(x, p)
     count = 0
     while true
-        q = div(value, T(5))
-        r = value - T(5) * q
-        r != 0 && break
-        value = q
+        q = div(x, 5)
+        r = x - 5 * q
+        r != 0 && return count >= p
+        x = q
         count += 1
     end
-    return count
 end
 
-@inline function multipleOfPowerOf5(value, p)
-    return pow5factor(value) >= p
-end
+pow2(x, p) = (x & ((1 << p) - 1)) == 0
 
-@inline function multipleOfPowerOf2(value::T, p) where {T}
-    return (value & ((T(1) << p) - 1)) == 0
-end
-
-@inline function decimallength(v::UInt64)
+@inline function decimallength(v)
     v >= 10000000000000000 && return 17
     v >= 1000000000000000 && return 16
     v >= 100000000000000 && return 15
@@ -114,4 +97,142 @@ end
     v >= 100 && return 3
     v >= 10 && return 2
     return 1
+end
+
+@inline function umul256(a, bHi, bLo)
+    aLo = a % UInt64
+    aHi = (a >> 64) % UInt64
+
+    b00 = UInt128(aLo) * bLo
+    b01 = UInt128(aLo) * bHi
+    b10 = UInt128(aHi) * bLo
+    b11 = UInt128(aHi) * bHi
+
+    b00Lo = b00 % UInt64
+    b00Hi = (b00 >> 64) % UInt64
+
+    mid1 = b10 + b00Hi
+    mid1Lo = mid1 % UInt64
+    mid1Hi = (mid1 >> 64) % UInt64
+
+    mid2 = b01 + mid1Lo
+    mid2Lo = mid2 % UInt64
+    mid2Hi = (mid2 >> 64) % UInt64
+
+    pHi = b11 + mid1Hi + mid2Hi
+    pLo = (UInt128(mid2Lo) << 64) | b00Lo
+    return pLo, pHi
+end
+
+@inline umul256_hi(a, bHi, bLo) = umul256(a, bHi, bLo)[2]
+
+@inline function mulshiftmod1e9(m, mula, mulb, mulc, j)
+    b0 = UInt128(m) * mula
+    b1 = UInt128(m) * mulb
+    b2 = UInt128(m) * mulc
+    mid = b1 + ((b0 >> 64) % UInt64)
+    s1 = b2 + ((mid >> 64) % UInt64)
+    v = s1 >> (j - 128)
+    multiplied = umul256_hi(v, 0x89705F4136B4A597, 0x31680A88F8953031)
+    shifted = (multiplied >> 29) % UInt32
+    return (v % UInt32) - UInt32(1000000000) * shifted
+end
+
+@inline function append_n_digits(olength, digits, buf, pos)
+    i = 0
+    while digits >= 10000
+        c = digits % 10000
+        digits = div(digits, 10000)
+        c0 = (c % 100) << 1
+        c1 = div(c, 100) << 1
+        unsafe_copyto!(buf, pos + olength - i - 2, DIGIT_TABLE, c0 + 1, 2)
+        unsafe_copyto!(buf, pos + olength - i - 4, DIGIT_TABLE, c1 + 1, 2)
+        i += 4
+    end
+    if digits >= 100
+        c = (digits % 100) << 1
+        digits = div(digits, 100)
+        unsafe_copyto!(buf, pos + olength - i - 2, DIGIT_TABLE, c + 1, 2)
+        i += 2
+    end
+    if digits >= 10
+        c = digits << 1
+        unsafe_copyto!(buf, pos + olength - i - 2, DIGIT_TABLE, c + 1, 2)
+        i += 2
+    else
+        buf[pos] = UInt8('0') + digits
+        i += 1
+    end
+    return pos + i
+end
+
+@inline function append_d_digits(olength, digits, buf, pos)
+    i = 0
+    while digits >= 10000
+        c = digits % 10000
+        digits = div(digits, 10000)
+        c0 = (c % 100) << 1
+        c1 = div(c, 100) << 1
+        unsafe_copyto!(buf, pos + olength - i - 2, DIGIT_TABLE, c0 + 1, 2)
+        unsafe_copyto!(buf, pos + olength - i - 4, DIGIT_TABLE, c1 + 1, 2)
+        i += 4
+    end
+    if digits >= 100
+        c = (digits % 100) << 1
+        digits = div(digits, 100)
+        unsafe_copyto!(buf, pos + olength - i - 2, DIGIT_TABLE, c + 1, 2)
+        i += 2
+    end
+    if digits >= 10
+        c = digits << 1
+        buf[pos] = DIGIT_TABLE[c + 1]
+        buf[pos + 1] = UInt8('.')
+        buf[pos + 2] = DIGIT_TABLE[c + 2]
+        i += 3
+    else
+        buf[pos] = UInt8('0') + digits
+        buf[pos + 1] = UInt8('.')
+        i += 2
+    end
+    return pos + i
+end
+
+@inline function append_c_digits(count, digits, buf, pos)
+    i = 0
+    while i < count - 1
+        c = (digits % 100) << 1
+        digits = div(digits, 100)
+        unsafe_copyto!(buf, pos + count - i - 2, DIGIT_TABLE, c + 1, 2)
+        i += 2
+    end
+    if i < count
+        buf[pos + count - i - 1] = UInt8('0') + (digits % 10)
+        i += 1
+    end
+    return pos + i
+end
+
+@inline function append_nine_digits(digits, buf, pos)
+    # @show String(buf[1:pos-1])
+    # @show pos
+    if digits == 0
+        for _ = 1:9
+            buf[pos] = UInt8('0')
+            pos += 1
+        end
+        return pos
+    end
+    i = 0
+    while i < 5
+        c = digits % 10000
+        digits = div(digits, 10000)
+        c0 = (c % 100) << 1
+        c1 = div(c, 100) << 1
+        unsafe_copyto!(buf, pos + 7 - i, DIGIT_TABLE, c0 + 1, 2)
+        unsafe_copyto!(buf, pos + 5 - i, DIGIT_TABLE, c1 + 1, 2)
+        i += 4
+    end
+    buf[pos] = UInt8('0') + digits
+    i += 1
+    return pos + i
 end
