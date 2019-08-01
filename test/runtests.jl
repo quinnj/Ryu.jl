@@ -501,7 +501,199 @@ end # Float64
         @test Ryu.writefixed(7.018232e-82, 6) == "0.000000"
     end
 
+end # fixed
+
+@testset "Ryu.writeexp" begin
+
+@testset "Basic" begin
+    @test Ryu.writeexp(todouble(false, 1234, 99999), 62) ==
+    "3.29100911471548643542566484557342614975886952410844652587974656e+63"
 end
+
+@testset "Zero" begin
+    @test Ryu.writeexp(0.0, 4) == "0.0000e+00"
+    @test Ryu.writeexp(0.0, 3) == "0.000e+00"
+    @test Ryu.writeexp(0.0, 2) == "0.00e+00"
+    @test Ryu.writeexp(0.0, 1) == "0.0e+00"
+    @test Ryu.writeexp(0.0, 0) == "0e+00"
+end
+
+@testset "MinMax" begin
+    @test Ryu.writeexp(todouble(false, 0, 1), 750) ==
+    "4.9406564584124654417656879286822137236505980261432476442558568250067550727020875186529983" *
+    "636163599237979656469544571773092665671035593979639877479601078187812630071319031140452784" *
+    "581716784898210368871863605699873072305000638740915356498438731247339727316961514003171538" *
+    "539807412623856559117102665855668676818703956031062493194527159149245532930545654440112748" *
+    "012970999954193198940908041656332452475714786901472678015935523861155013480352649347201937" *
+    "902681071074917033322268447533357208324319360923828934583680601060115061698097530783422773" *
+    "183292479049825247307763759272478746560847782037344696995336470179726777175851256605511991" *
+    "315048911014510378627381672509558373897335989936648099411642057026370902792427675445652290" *
+    "87538682506419718265533447265625e-324"
+
+    @test Ryu.writeexp(todouble(false, 2046, 0xFFFFFFFFFFFFF), 308) ==
+    "1.7976931348623157081452742373170435679807056752584499659891747680315726078002853876058955" *
+    "863276687817154045895351438246423432132688946418276846754670353751698604991057655128207624" *
+    "549009038932894407586850845513394230458323690322294816580855933212334827479782620414472316" *
+    "8738177180919299881250404026184124858368e+308"
+end
+
+@testset "RoundToEven" begin
+    @test Ryu.writeexp(0.125, 2) == "1.25e-01"
+    @test Ryu.writeexp(0.125, 1) == "1.2e-01"
+    @test Ryu.writeexp(0.375, 2) == "3.75e-01"
+    @test Ryu.writeexp(0.375, 1) == "3.8e-01"
+end
+
+@testset "RoundToEvenInteger" begin
+    @test Ryu.writeexp(2.5, 1) == "2.5e+00"
+    @test Ryu.writeexp(2.5, 0) == "2e+00"
+    @test Ryu.writeexp(3.5, 1) == "3.5e+00"
+    @test Ryu.writeexp(3.5, 0) == "4e+00"
+end
+
+@testset "NonRoundToEvenScenarios" begin
+    @test Ryu.writeexp(0.748046875, 2) == "7.48e-01"
+    @test Ryu.writeexp(0.748046875, 1) == "7.5e-01"
+    @test Ryu.writeexp(0.748046875, 0) == "7e-01"    # 0.75 would round to "8e-01", but this is smaller
+
+    @test Ryu.writeexp(0.2509765625, 2) == "2.51e-01"
+    @test Ryu.writeexp(0.2509765625, 1) == "2.5e-01"
+    @test Ryu.writeexp(0.2509765625, 0) == "3e-01"    # 0.25 would round to "2e-01", but this is larger
+
+    @test Ryu.writeexp(todouble(false, 1021, 1), 53) ==
+    "2.50000000000000055511151231257827021181583404541015625e-01"
+    @test Ryu.writeexp(todouble(false, 1021, 1),  2) ==
+    "2.50e-01"
+    @test Ryu.writeexp(todouble(false, 1021, 1),  1) ==
+    "2.5e-01"
+    @test Ryu.writeexp(todouble(false, 1021, 1),  0) ==
+    "3e-01"    # 0.25 would round to "2e-01", but this is larger (again)
+end
+
+@testset "VaryingPrecision" begin
+    @test Ryu.writeexp(1729.142857142857, 50) == "1.72914285714285711037518922239542007446289062500000e+03"
+    @test Ryu.writeexp(1729.142857142857, 49) == "1.7291428571428571103751892223954200744628906250000e+03"
+    @test Ryu.writeexp(1729.142857142857, 48) == "1.729142857142857110375189222395420074462890625000e+03"
+    @test Ryu.writeexp(1729.142857142857, 47) == "1.72914285714285711037518922239542007446289062500e+03"
+    @test Ryu.writeexp(1729.142857142857, 46) == "1.7291428571428571103751892223954200744628906250e+03"
+    @test Ryu.writeexp(1729.142857142857, 45) == "1.729142857142857110375189222395420074462890625e+03"
+    @test Ryu.writeexp(1729.142857142857, 44) == "1.72914285714285711037518922239542007446289062e+03"
+    @test Ryu.writeexp(1729.142857142857, 43) == "1.7291428571428571103751892223954200744628906e+03"
+    @test Ryu.writeexp(1729.142857142857, 42) == "1.729142857142857110375189222395420074462891e+03"
+    @test Ryu.writeexp(1729.142857142857, 41) == "1.72914285714285711037518922239542007446289e+03"
+    @test Ryu.writeexp(1729.142857142857, 40) == "1.7291428571428571103751892223954200744629e+03"
+    @test Ryu.writeexp(1729.142857142857, 39) == "1.729142857142857110375189222395420074463e+03"
+    @test Ryu.writeexp(1729.142857142857, 38) == "1.72914285714285711037518922239542007446e+03"
+    @test Ryu.writeexp(1729.142857142857, 37) == "1.7291428571428571103751892223954200745e+03"
+    @test Ryu.writeexp(1729.142857142857, 36) == "1.729142857142857110375189222395420074e+03"
+    @test Ryu.writeexp(1729.142857142857, 35) == "1.72914285714285711037518922239542007e+03"
+    @test Ryu.writeexp(1729.142857142857, 34) == "1.7291428571428571103751892223954201e+03"
+    @test Ryu.writeexp(1729.142857142857, 33) == "1.729142857142857110375189222395420e+03"
+    @test Ryu.writeexp(1729.142857142857, 32) == "1.72914285714285711037518922239542e+03"
+    @test Ryu.writeexp(1729.142857142857, 31) == "1.7291428571428571103751892223954e+03"
+    @test Ryu.writeexp(1729.142857142857, 30) == "1.729142857142857110375189222395e+03"
+    @test Ryu.writeexp(1729.142857142857, 29) == "1.72914285714285711037518922240e+03"
+    @test Ryu.writeexp(1729.142857142857, 28) == "1.7291428571428571103751892224e+03"
+    @test Ryu.writeexp(1729.142857142857, 27) == "1.729142857142857110375189222e+03"
+    @test Ryu.writeexp(1729.142857142857, 26) == "1.72914285714285711037518922e+03"
+    @test Ryu.writeexp(1729.142857142857, 25) == "1.7291428571428571103751892e+03"
+    @test Ryu.writeexp(1729.142857142857, 24) == "1.729142857142857110375189e+03"
+    @test Ryu.writeexp(1729.142857142857, 23) == "1.72914285714285711037519e+03"
+    @test Ryu.writeexp(1729.142857142857, 22) == "1.7291428571428571103752e+03"
+    @test Ryu.writeexp(1729.142857142857, 21) == "1.729142857142857110375e+03"
+    @test Ryu.writeexp(1729.142857142857, 20) == "1.72914285714285711038e+03"
+    @test Ryu.writeexp(1729.142857142857, 19) == "1.7291428571428571104e+03"
+    @test Ryu.writeexp(1729.142857142857, 18) == "1.729142857142857110e+03"
+    @test Ryu.writeexp(1729.142857142857, 17) == "1.72914285714285711e+03"
+    @test Ryu.writeexp(1729.142857142857, 16) == "1.7291428571428571e+03"
+    @test Ryu.writeexp(1729.142857142857, 15) == "1.729142857142857e+03"
+    @test Ryu.writeexp(1729.142857142857, 14) == "1.72914285714286e+03"
+    @test Ryu.writeexp(1729.142857142857, 13) == "1.7291428571429e+03"
+    @test Ryu.writeexp(1729.142857142857, 12) == "1.729142857143e+03"
+    @test Ryu.writeexp(1729.142857142857, 11) == "1.72914285714e+03"
+    @test Ryu.writeexp(1729.142857142857, 10) == "1.7291428571e+03"
+    @test Ryu.writeexp(1729.142857142857,  9) == "1.729142857e+03"
+    @test Ryu.writeexp(1729.142857142857,  8) == "1.72914286e+03"
+    @test Ryu.writeexp(1729.142857142857,  7) == "1.7291429e+03"
+    @test Ryu.writeexp(1729.142857142857,  6) == "1.729143e+03"
+    @test Ryu.writeexp(1729.142857142857,  5) == "1.72914e+03"
+    @test Ryu.writeexp(1729.142857142857,  4) == "1.7291e+03"
+    @test Ryu.writeexp(1729.142857142857,  3) == "1.729e+03"
+    @test Ryu.writeexp(1729.142857142857,  2) == "1.73e+03"
+    @test Ryu.writeexp(1729.142857142857,  1) == "1.7e+03"
+    @test Ryu.writeexp(1729.142857142857,  0) == "2e+03"
+end
+
+@testset "Carrying" begin
+    @test Ryu.writeexp(2.0009, 4) == "2.0009e+00"
+    @test Ryu.writeexp(2.0009, 3) == "2.001e+00"
+    @test Ryu.writeexp(2.0029, 4) == "2.0029e+00"
+    @test Ryu.writeexp(2.0029, 3) == "2.003e+00"
+    @test Ryu.writeexp(2.0099, 4) == "2.0099e+00"
+    @test Ryu.writeexp(2.0099, 3) == "2.010e+00"
+    @test Ryu.writeexp(2.0299, 4) == "2.0299e+00"
+    @test Ryu.writeexp(2.0299, 3) == "2.030e+00"
+    @test Ryu.writeexp(2.0999, 4) == "2.0999e+00"
+    @test Ryu.writeexp(2.0999, 3) == "2.100e+00"
+    @test Ryu.writeexp(2.2999, 4) == "2.2999e+00"
+    @test Ryu.writeexp(2.2999, 3) == "2.300e+00"
+    @test Ryu.writeexp(2.9999, 4) == "2.9999e+00"
+    @test Ryu.writeexp(2.9999, 3) == "3.000e+00"
+    @test Ryu.writeexp(9.9999, 4) == "9.9999e+00"
+    @test Ryu.writeexp(9.9999, 3) == "1.000e+01"
+
+    @test Ryu.writeexp(2.09, 2) == "2.09e+00"
+    @test Ryu.writeexp(2.09, 1) == "2.1e+00"
+    @test Ryu.writeexp(2.29, 2) == "2.29e+00"
+    @test Ryu.writeexp(2.29, 1) == "2.3e+00"
+    @test Ryu.writeexp(2.99, 2) == "2.99e+00"
+    @test Ryu.writeexp(2.99, 1) == "3.0e+00"
+    @test Ryu.writeexp(9.99, 2) == "9.99e+00"
+    @test Ryu.writeexp(9.99, 1) == "1.0e+01"
+
+    @test Ryu.writeexp(2.9, 1) == "2.9e+00"
+    @test Ryu.writeexp(2.9, 0) == "3e+00"
+    @test Ryu.writeexp(9.9, 1) == "9.9e+00"
+    @test Ryu.writeexp(9.9, 0) == "1e+01"
+end
+
+@testset "Exponents" begin
+    @test Ryu.writeexp(9.99e-100, 2) == "9.99e-100"
+    @test Ryu.writeexp(9.99e-99 , 2) == "9.99e-99"
+    @test Ryu.writeexp(9.99e-10 , 2) == "9.99e-10"
+    @test Ryu.writeexp(9.99e-09 , 2) == "9.99e-09"
+    @test Ryu.writeexp(9.99e-01 , 2) == "9.99e-01"
+    @test Ryu.writeexp(9.99e+00 , 2) == "9.99e+00"
+    @test Ryu.writeexp(9.99e+01 , 2) == "9.99e+01"
+    @test Ryu.writeexp(9.99e+09 , 2) == "9.99e+09"
+    @test Ryu.writeexp(9.99e+10 , 2) == "9.99e+10"
+    @test Ryu.writeexp(9.99e+99 , 2) == "9.99e+99"
+    @test Ryu.writeexp(9.99e+100, 2) == "9.99e+100"
+
+    @test Ryu.writeexp(9.99e-100, 1) == "1.0e-99"
+    @test Ryu.writeexp(9.99e-99 , 1) == "1.0e-98"
+    @test Ryu.writeexp(9.99e-10 , 1) == "1.0e-09"
+    @test Ryu.writeexp(9.99e-09 , 1) == "1.0e-08"
+    @test Ryu.writeexp(9.99e-01 , 1) == "1.0e+00"
+    @test Ryu.writeexp(9.99e+00 , 1) == "1.0e+01"
+    @test Ryu.writeexp(9.99e+01 , 1) == "1.0e+02"
+    @test Ryu.writeexp(9.99e+09 , 1) == "1.0e+10"
+    @test Ryu.writeexp(9.99e+10 , 1) == "1.0e+11"
+    @test Ryu.writeexp(9.99e+99 , 1) == "1.0e+100"
+    @test Ryu.writeexp(9.99e+100, 1) == "1.0e+101"
+end
+
+@testset "PrintDecimalPoint" begin
+  # These values exercise each codepath.
+    @test Ryu.writeexp(1e+54, 0) == "1e+54"
+    @test Ryu.writeexp(1e+54, 1) == "1.0e+54"
+    @test Ryu.writeexp(1e-63, 0) == "1e-63"
+    @test Ryu.writeexp(1e-63, 1) == "1.0e-63"
+    @test Ryu.writeexp(1e+83, 0) == "1e+83"
+    @test Ryu.writeexp(1e+83, 1) == "1.0e+83"
+end
+
+end # exp
 
 end # Ryu
 

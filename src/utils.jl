@@ -14,19 +14,19 @@ bias(::Type{Float16}) = 15
 bias(::Type{Float32}) = 127
 bias(::Type{Float64}) = 1023
 
-pow5_bitcount(::Type{Float16}) = 0 # TODO!!
+pow5_bitcount(::Type{Float16}) = 30 # ??
 pow5_bitcount(::Type{Float32}) = 61
 pow5_bitcount(::Type{Float64}) = 121
 
-pow5_inv_bitcount(::Type{Float16}) = 0 # TODO!!
+pow5_inv_bitcount(::Type{Float16}) = 28 # ??
 pow5_inv_bitcount(::Type{Float32}) = 59
 pow5_inv_bitcount(::Type{Float64}) = 122
 
-qinvbound(::Type{Float16}) = 0 # TODO!!
+qinvbound(::Type{Float16}) = 4 # or 3
 qinvbound(::Type{Float32}) = 9
 qinvbound(::Type{Float64}) = 21
 
-qbound(::Type{Float16}) = 0 # TODO!!
+qbound(::Type{Float16}) = 15
 qbound(::Type{Float32}) = 31
 qbound(::Type{Float64}) = 63
 
@@ -173,14 +173,14 @@ end
         digits = div(digits, 10000)
         c0 = (c % 100) << 1
         c1 = div(c, 100) << 1
-        unsafe_copyto!(buf, pos + olength - i - 2, DIGIT_TABLE, c0 + 1, 2)
-        unsafe_copyto!(buf, pos + olength - i - 4, DIGIT_TABLE, c1 + 1, 2)
+        unsafe_copyto!(buf, pos + olength + 1 - i - 2, DIGIT_TABLE, c0 + 1, 2)
+        unsafe_copyto!(buf, pos + olength + 1 - i - 4, DIGIT_TABLE, c1 + 1, 2)
         i += 4
     end
     if digits >= 100
         c = (digits % 100) << 1
         digits = div(digits, 100)
-        unsafe_copyto!(buf, pos + olength - i - 2, DIGIT_TABLE, c + 1, 2)
+        unsafe_copyto!(buf, pos + olength + 1 - i - 2, DIGIT_TABLE, c + 1, 2)
         i += 2
     end
     if digits >= 10
