@@ -30,18 +30,11 @@ qbound(::Type{Float16}) = 15
 qbound(::Type{Float32}) = 31
 qbound(::Type{Float64}) = 63
 
-pow5invsplit(::Type{Float16}, q) = 0 # TODO!!
-pow5invsplit(::Type{Float32}, q) = FLOAT_POW5_INV_SPLIT[q + 1]
-pow5invsplit(::Type{Float64}, q) = DOUBLE_POW5_INV_SPLIT[q + 1]
-
-pow5split(::Type{Float16}, i) = 0 # TODO!!
-pow5split(::Type{Float32}, i) = FLOAT_POW5_SPLIT[i + 1]
-pow5split(::Type{Float64}, i) = DOUBLE_POW5_SPLIT[i + 1]
-
 log10pow2(e) = (e * 78913) >> 18
 log10pow5(e) = (e * 732923) >> 20
 pow5bits(e) = ((e * 1217359) >> 19) + 1
 mulshift(m, mula, mulb, j) = ((((UInt128(m) * mula) >> 64) + UInt128(m) * mulb) >> (j - 64)) % UInt64
+mulshift(m, mul, j) = ((((m * (mul % UInt32)) >> 32) + (m * (mul >> 32))) >> (j - 32)) % UInt32
 indexforexp(e) = div(e + 15, 16)
 pow10bitsforindex(idx) = 16 * idx + 120
 lengthforindex(idx) = div(log10pow2(16 * idx) + 1 + 16 + 8, 9)
@@ -97,6 +90,38 @@ end
     v >= 100 && return 3
     v >= 10 && return 2
     return 1
+end
+
+@inline function mulshiftinvsplit(::Type{Float64}, mv, mp, mm, i, j)
+    @inbounds mula, mulb = DOUBLE_POW5_INV_SPLIT[i + 1]
+    vr = mulshift(mv, mula, mulb, j)
+    vp = mulshift(mp, mula, mulb, j)
+    vm = mulshift(mm, mula, mulb, j)
+    return vr, vp, vm
+end
+
+@inline function mulshiftinvsplit(::Type{Float32}, mv, mp, mm, i, j)
+    @inbounds mul = FLOAT_POW5_INV_SPLIT[i + 1]
+    vr = mulshift(mv, mul, j)
+    vp = mulshift(mp, mul, j)
+    vm = mulshift(mm, mul, j)
+    return vr, vp, vm
+end
+
+@inline function mulshiftsplit(::Type{Float64}, mv, mp, mm, i, j)
+    @inbounds mula, mulb = DOUBLE_POW5_SPLIT[i + 1]
+    vr = mulshift(mv, mula, mulb, j)
+    vp = mulshift(mp, mula, mulb, j)
+    vm = mulshift(mm, mula, mulb, j)
+    return vr, vp, vm
+end
+
+@inline function mulshiftsplit(::Type{Float32}, mv, mp, mm, i, j)
+    @inbounds mul = FLOAT_POW5_SPLIT[i + 1]
+    vr = mulshift(mv, mul, j)
+    vp = mulshift(mp, mul, j)
+    vm = mulshift(mm, mul, j)
+    return vr, vp, vm
 end
 
 @inline function umul256(a, bHi, bLo)

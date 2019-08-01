@@ -222,105 +222,105 @@ end
 
 end # Float64
 
-# @testset "Float32" begin
+@testset "Float32" begin
 
-# @testset "Basic" begin
-#     @test "0.0" == Ryu.write(Float32(0.0))
-#     @test "-0.0" == Ryu.write(Float32(-0.0))
-#     @test "1e0" == Ryu.write(Float32(1.0))
-#     @test "-1e0" == Ryu.write(Float32(-1.0))
-#     @test "NaN" == Ryu.write(Float32(NaN))
-#     @test "Inf" == Ryu.write(Float32(Inf))
-#     @test "-Inf" == Ryu.write(Float32(-Inf))
-# end
+@testset "Basic" begin
+    @test "0e0" == Ryu.write(Float32(0.0))
+    @test "-0e0" == Ryu.write(Float32(-0.0))
+    @test "1e0" == Ryu.write(Float32(1.0))
+    @test "-1e0" == Ryu.write(Float32(-1.0))
+    @test "NaN" == Ryu.write(Float32(NaN))
+    @test "Inf" == Ryu.write(Float32(Inf))
+    @test "-Inf" == Ryu.write(Float32(-Inf))
+end
 
-# @testset "SwitchToSubnormal" begin
-#     @test "1.1754944e-38" == Ryu.write(Float32(1.1754944e-38))
-# end
+@testset "SwitchToSubnormal" begin
+    @test "1.1754944e-38" == Ryu.write(1.1754944f-38)
+end
 
-# @testset "MinAndMax" begin
-#     @test "3.4028235e38" == Ryu.write(Core.bitcast(Float32, 0x7f7fffff))
-#     @test "1e-45" == Ryu.write(Core.bitcast(Float32, Int32(1)))
-# end
+@testset "MinAndMax" begin
+    @test "3.4028235e38" == Ryu.write(Core.bitcast(Float32, 0x7f7fffff))
+    @test "1e-45" == Ryu.write(Core.bitcast(Float32, Int32(1)))
+end
 
-# # Check that we return the exact boundary if it is the shortest
-# # representation, but only if the original floating point number is even.
-# @testset "BoundaryRoundeven" begin
-#     @test "3.355445e7" == Ryu.write(Float32(3.355445e7))
-#     @test "9e9" == Ryu.write(Float32(8.999999e9))
-#     @test "3.436672e10" == Ryu.write(Float32(3.4366717e10))
-# end
+# Check that we return the exact boundary if it is the shortest
+# representation, but only if the original floating point number is even.
+@testset "BoundaryRoundeven" begin
+    @test "3.355445e7" == Ryu.write(3.355445f7)
+    @test "9e9" == Ryu.write(8.999999f9)
+    @test "3.436672e10" == Ryu.write(3.4366717f10)
+end
 
-# # If the exact value is exactly halfway between two shortest representations,
-# # then we round to even. It seems like this only makes a difference if the
-# # last two digits are ...2|5 or ...7|5, and we cut off the 5.
-# @testset "exactValueRoundeven" begin
-#     @test "3.0540412e5" == Ryu.write(Float32(3.0540412e5))
-#     @test "8.0990312e3" == Ryu.write(Float32(8.0990312e3))
-# end
+# If the exact value is exactly halfway between two shortest representations,
+# then we round to even. It seems like this only makes a difference if the
+# last two digits are ...2|5 or ...7|5, and we cut off the 5.
+@testset "exactValueRoundeven" begin
+    @test "3.0540412e5" == Ryu.write(3.0540412f5)
+    @test "8.0990312e3" == Ryu.write(8.0990312f3)
+end
 
-# @testset "LotsOfTrailingZeros" begin
-#     # Pattern for the first test: 00111001100000000000000000000000
-#     @test "2.4414062e-4" == Ryu.write(Float32(2.4414062e-4))
-#     @test "2.4414062e-3" == Ryu.write(Float32(2.4414062e-3))
-#     @test "4.3945312e-3" == Ryu.write(Float32(4.3945312e-3))
-#     @test "6.3476562e-3" == Ryu.write(Float32(6.3476562e-3))
-# end
+@testset "LotsOfTrailingZeros" begin
+    # Pattern for the first test: 00111001100000000000000000000000
+    @test "2.4414062e-4" == Ryu.write(2.4414062f-4)
+    @test "2.4414062e-3" == Ryu.write(2.4414062f-3)
+    @test "4.3945312e-3" == Ryu.write(4.3945312f-3)
+    @test "6.3476562e-3" == Ryu.write(6.3476562f-3)
+end
 
-# @testset "Regression" begin
-#     @test "4.7223665e21" == Ryu.write(Float32(4.7223665e21))
-#     @test "8.388608e6" == Ryu.write(Float32(8388608.0))
-#     @test "1.6777216e7" == Ryu.write(Float32(1.6777216e7))
-#     @test "3.3554436e7" == Ryu.write(Float32(3.3554436e7))
-#     @test "6.7131496e7" == Ryu.write(Float32(6.7131496e7))
-#     @test "1.9310392e-38" == Ryu.write(Float32(1.9310392e-38))
-#     @test "-2.47e-43" == Ryu.write(Float32(-2.47e-43))
-#     @test "1.993244e-38" == Ryu.write(Float32(1.993244e-38))
-#     @test "4.1039004e3" == Ryu.write(Float32(4103.9003))
-#     @test "5.3399997e9" == Ryu.write(Float32(5.3399997e9))
-#     @test "6.0898e-39" == Ryu.write(Float32(6.0898e-39))
-#     @test "1.0310042e-3" == Ryu.write(Float32(0.0010310042))
-#     @test "2.882326e17" == Ryu.write(Float32(2.8823261e17))
-#     @test "7.038531e-26" == Ryu.write(Float32(7.0385309e-26))
-#     @test "9.223404e17" == Ryu.write(Float32(9.2234038e17))
-#     @test "6.710887e7" == Ryu.write(Float32(6.7108872e7))
-#     @test "1e-44" == Ryu.write(Float32(1.0e-44))
-#     @test "2.816025e14" == Ryu.write(Float32(2.816025e14))
-#     @test "9.223372e18" == Ryu.write(Float32(9.223372e18))
-#     @test "1.5846086e29" == Ryu.write(Float32(1.5846085e29))
-#     @test "1.1811161e19" == Ryu.write(Float32(1.1811161e19))
-#     @test "5.368709e18" == Ryu.write(Float32(5.368709e18))
-#     @test "4.6143166e18" == Ryu.write(Float32(4.6143165e18))
-#     @test "7.812537e-3" == Ryu.write(Float32(0.007812537))
-#     @test "1e-45" == Ryu.write(Float32(1.4e-45))
-#     @test "1.18697725e20" == Ryu.write(Float32(1.18697724e20))
-#     @test "1.00014165e-36" == Ryu.write(Float32(1.00014165e-36))
-#     @test "2e2" == Ryu.write(Float32(200.0))
-#     @test "3.3554432e7" == Ryu.write(Float32(3.3554432e7))
-# end
+@testset "Regression" begin
+    @test "4.7223665e21" == Ryu.write(4.7223665f21)
+    @test "8.388608e6" == Ryu.write(8388608f0)
+    @test "1.6777216e7" == Ryu.write(1.6777216f7)
+    @test "3.3554436e7" == Ryu.write(3.3554436f7)
+    @test "6.7131496e7" == Ryu.write(6.7131496f7)
+    @test "1.9310392e-38" == Ryu.write(1.9310392f-38)
+    @test "-2.47e-43" == Ryu.write(-2.47f-43)
+    @test "1.993244e-38" == Ryu.write(1.993244f-38)
+    @test "4.1039004e3" == Ryu.write(4103.9003f0)
+    @test "5.3399997e9" == Ryu.write(5.3399997f9)
+    @test "6.0898e-39" == Ryu.write(6.0898f-39)
+    @test "1.0310042e-3" == Ryu.write(0.0010310042f0)
+    @test "2.882326e17" == Ryu.write(2.8823261f17)
+    @test "7.038531e-26" == Ryu.write(7.0385309f-26)
+    @test "9.223404e17" == Ryu.write(9.2234038f17)
+    @test "6.710887e7" == Ryu.write(6.7108872f7)
+    @test "1e-44" == Ryu.write(1.0f-44)
+    @test "2.816025e14" == Ryu.write(2.816025f14)
+    @test "9.223372e18" == Ryu.write(9.223372f18)
+    @test "1.5846086e29" == Ryu.write(1.5846085f29)
+    @test "1.1811161e19" == Ryu.write(1.1811161f19)
+    @test "5.368709e18" == Ryu.write(5.368709f18)
+    @test "4.6143166e18" == Ryu.write(4.6143165f18)
+    @test "7.812537e-3" == Ryu.write(0.007812537f0)
+    @test "1e-45" == Ryu.write(1.4f-45)
+    @test "1.18697725e20" == Ryu.write(1.18697724f20)
+    @test "1.00014165e-36" == Ryu.write(1.00014165f-36)
+    @test "2e2" == Ryu.write(200f0)
+    @test "3.3554432e7" == Ryu.write(3.3554432f7)
+end
 
-# @testset "LooksLikePow5" begin
-#     # These numbers have a mantissa that is the largest power of 5 that fits,
-#     # and an exponent that causes the computation for q to result in 10, which is a corner
-#     # case for Ryu.
-#     @test "6.7108864e17" == Ryu.write(Core.bitcast(Float32, 0x5D1502F9))
-#     @test "1.3421773e18" == Ryu.write(Core.bitcast(Float32, 0x5D9502F9))
-#     @test "2.6843546e18" == Ryu.write(Core.bitcast(Float32, 0x5E1502F9))
-# end
+@testset "LooksLikePow5" begin
+    # These numbers have a mantissa that is the largest power of 5 that fits,
+    # and an exponent that causes the computation for q to result in 10, which is a corner
+    # case for Ryu.
+    @test "6.7108864e17" == Ryu.write(Core.bitcast(Float32, 0x5D1502F9))
+    @test "1.3421773e18" == Ryu.write(Core.bitcast(Float32, 0x5D9502F9))
+    @test "2.6843546e18" == Ryu.write(Core.bitcast(Float32, 0x5E1502F9))
+end
 
-# @testset "OutputLength" begin
-#     @test "1e0" == Ryu.write(Float32(1.0))
-#     @test "1.2e0" == Ryu.write(Float32(1.2))
-#     @test "1.23e0" == Ryu.write(Float32(1.23))
-#     @test "1.234e0" == Ryu.write(Float32(1.234))
-#     @test "1.2345e0" == Ryu.write(Float32(1.2345))
-#     @test "1.23456e0" == Ryu.write(Float32(1.23456))
-#     @test "1.234567e0" == Ryu.write(Float32(1.234567))
-#     @test "1.2345678e0" == Ryu.write(Float32(1.2345678))
-#     @test "1.23456735e-36" == Ryu.write(Float32(1.23456735e-36))
-# end
+@testset "OutputLength" begin
+    @test "1e0" == Ryu.write(Float32(1.0))
+    @test "1.2e0" == Ryu.write(Float32(1.2))
+    @test "1.23e0" == Ryu.write(Float32(1.23))
+    @test "1.234e0" == Ryu.write(Float32(1.234))
+    @test "1.2345e0" == Ryu.write(Float32(1.2345))
+    @test "1.23456e0" == Ryu.write(Float32(1.23456))
+    @test "1.234567e0" == Ryu.write(Float32(1.234567))
+    @test "1.2345678e0" == Ryu.write(Float32(1.2345678))
+    @test "1.23456735e-36" == Ryu.write(Float32(1.23456735e-36))
+end
 
-# end # Float32
+end # Float32
 
 @testset "Ryu.writefixed" begin
     @testset "Basic" begin

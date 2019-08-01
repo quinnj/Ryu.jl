@@ -58,12 +58,12 @@ end
     end
 
     bits = uint(x)
-    mant = bits & oftype(bits, (1 << mantissabits(T) - 1))
+    mant = bits & (oftype(bits, 1) << mantissabits(T) - oftype(bits, 1))
     exp = Int((bits >> mantissabits(T)) & ((1 << exponentbits(T)) - 1))
 
     m2 = oftype(bits, 1 << mantissabits(T)) | mant
     e2 = exp - bias(T) - mantissabits(T)
-    fraction = m2 & Core.bitcast(typeof(bits), (1 << -e2) - 1)
+    fraction = m2 & ((oftype(bits, 1) << -e2) - 1)
     if e2 > 0 || e2 < -52 || fraction != 0
         if exp == 0
             e2 = 1 - bias(T) - mantissabits(T) - 2
@@ -84,10 +84,14 @@ end
             e10 = q
             k = pow5_inv_bitcount(T) + pow5bits(q) - 1
             i = -e2 + q + k
-            mula, mulb = pow5invsplit(T, q)
-            vr = mulshift(mv, mula, mulb, i)
-            vp = mulshift(mp, mula, mulb, i)
-            vm = mulshift(mm, mula, mulb, i)
+            vr, vp, vm = mulshiftinvsplit(T, mv, mp, mm, q, i)
+            # if T == Float32
+            #     if q != 0 && div(vp - 1, 10) <= div(vm, 10)
+            #         l = 59 - pow5bits(q - 1) - 1
+            #         @inbounds mul = FLOAT_POW5_INV_SPLIT[q]
+            #         lastRemovedDigit = (mulshift(mv, mul, -e2 + q - 1 + l) % 10) % UInt8
+            #     end
+            # end
             if q <= qinvbound(T)
                 if ((mv % UInt32) - 5 * div(mv, 5)) == 0
                     vrIsTrailingZeros = pow5(mv, q)
@@ -98,15 +102,19 @@ end
                 end
             end
         else
-            q = log10pow5(-e2) - (-e2 > 1)
+            q = log10pow5(-e2) - (T == Float64 ? (-e2 > 1) : 0)
             e10 = q + e2
             i = -e2 - q
             k = pow5bits(i) - pow5_bitcount(T)
             j = q - k
-            mula, mulb = pow5split(T, i)
-            vr = mulshift(mv, mula, mulb, j)
-            vp = mulshift(mp, mula, mulb, j)
-            vm = mulshift(mm, mula, mulb, j)
+            vr, vp, vm = mulshiftsplit(T, mv, mp, mm, i, j)
+            if T == Float32
+                if q != 0 && div(vp - 1, 10) <= div(vm, 10)
+                    j = q - 1 - (pow5bits(i + 1) - 61)
+                    @inbounds mul = FLOAT_POW5_SPLIT[i + 2]
+                    lastRemovedDigit = (mulshift(mv, mul, j) % 10) % UInt8
+                end
+            end
             if q <= 1
                 vrIsTrailingZeros = true
                 if even
@@ -114,11 +122,10 @@ end
                 else
                     vp -= 1
                 end
-            elseif q < 63
-                vrIsTrailingZeros = pow2(mv, q)
+            elseif q < qbound(T)
+                vrIsTrailingZeros = pow2(mv, q - (T != Float64))
             end
         end
-        # @show Int(vr)
         removed = 0
         if vmIsTrailingZeros || vrIsTrailingZeros
             while true
@@ -170,7 +177,6 @@ end
                 removed += 2
             end
             while true
-                # @show Int(vr)
                 vpDiv10 = div(vp, 10)
                 vmDiv10 = div(vm, 10)
                 vpDiv10 <= vmDiv10 && break
@@ -182,7 +188,7 @@ end
                 vm = vmDiv10
                 removed += 1
             end
-            output = vr + (vr == vm || roundUp)
+            output = vr + (vr == vm || roundUp || lastRemovedDigit >= 5)
         end
         nexp = e10 + removed
     else
@@ -201,7 +207,6 @@ end
         @inbounds buf[pos] = UInt8('-')
         pos += 1
     end
-    # @show output
     olength = decimallength(output)
 
     i = 0
@@ -378,9 +383,6 @@ end
         while i < blocks
             j = 120 + (-e2 - 16 * idx)
             p = POW10_OFFSET_2[idx + 1] + UInt32(i) - MIN_BLOCK_2[idx + 1]
-            # @show i
-            # @show j
-            # @show Int(p)
             if p >= POW10_OFFSET_2[idx + 2]
                 for _ = 1:(precision - 9 * i)
                     buf[pos] = UInt8('0')
@@ -390,7 +392,6 @@ end
             end
             #=@inbounds=# mula, mulb, mulc = POW10_SPLIT_2[p + 1]
             digits = mulshiftmod1e9(m2 << 8, mula, mulb, mulc, j + 8)
-            # @show Int(digits)
             if i < blocks - 1
                 pos = append_nine_digits(digits, buf, pos)
             else
@@ -416,7 +417,6 @@ end
                 break
             end
             i += 1
-            # @show String(buf[1:pos])
         end
         if roundUp != 0
             roundPos = pos
