@@ -1,6 +1,5 @@
 module Ryu
 
-include("tables.jl")
 include("utils.jl")
 
 const MANTISSA_MASK = 0x000fffffffffffff
@@ -72,26 +71,26 @@ end
             e2 -= 2
         end
         even = (m2 & 1) == 0
-        mv = 4 * m2
-        mp = mv + 2
+        mv = oftype(m2, 4 * m2)
+        mp = oftype(m2, mv + 2)
         mmShift = mant != 0 || exp <= 1
-        mm = mv - 1 - mmShift
+        mm = oftype(m2, mv - 1 - mmShift)
         vmIsTrailingZeros = false
         vrIsTrailingZeros = false
         lastRemovedDigit = 0x00
         if e2 >= 0
-            q = log10pow2(e2) - (e2 > 3)
+            q = log10pow2(e2) - (T == Float64 ? (e2 > 3) : 0)
             e10 = q
             k = pow5_inv_bitcount(T) + pow5bits(q) - 1
             i = -e2 + q + k
             vr, vp, vm = mulshiftinvsplit(T, mv, mp, mm, q, i)
-            # if T == Float32
-            #     if q != 0 && div(vp - 1, 10) <= div(vm, 10)
-            #         l = 59 - pow5bits(q - 1) - 1
-            #         @inbounds mul = FLOAT_POW5_INV_SPLIT[q]
-            #         lastRemovedDigit = (mulshift(mv, mul, -e2 + q - 1 + l) % 10) % UInt8
-            #     end
-            # end
+            if T == Float32 || T == Float16
+                if q != 0 && div(vp - 1, 10) <= div(vm, 10)
+                    l = pow5_inv_bitcount(T) + pow5bits(q - 1) - 1
+                    @inbounds mul = T == Float32 ? FLOAT_POW5_INV_SPLIT[q] : HALF_POW5_INV_SPLIT[q]
+                    lastRemovedDigit = (mulshift(mv, mul, -e2 + q - 1 + l) % 10) % UInt8
+                end
+            end
             if q <= qinvbound(T)
                 if ((mv % UInt32) - 5 * div(mv, 5)) == 0
                     vrIsTrailingZeros = pow5(mv, q)
@@ -108,10 +107,10 @@ end
             k = pow5bits(i) - pow5_bitcount(T)
             j = q - k
             vr, vp, vm = mulshiftsplit(T, mv, mp, mm, i, j)
-            if T == Float32
+            if T == Float32 || T == Float16
                 if q != 0 && div(vp - 1, 10) <= div(vm, 10)
-                    j = q - 1 - (pow5bits(i + 1) - 61)
-                    @inbounds mul = FLOAT_POW5_SPLIT[i + 2]
+                    j = q - 1 - (pow5bits(i + 1) - pow5_bitcount(T))
+                    @inbounds mul = T == Float32 ? FLOAT_POW5_SPLIT[i + 2] : HALF_POW5_SPLIT[i + 2]
                     lastRemovedDigit = (mulshift(mv, mul, j) % 10) % UInt8
                 end
             end
@@ -559,6 +558,7 @@ end
         while i < 200
             j = 120 + (-e2 - 16 * idx)
             p = POW10_OFFSET_2[idx + 1] + i - MIN_BLOCK_2[idx + 1]
+            # @show i, p, pos
             #=@inbounds=# mula, mulb, mulc = POW10_SPLIT_2[p + 1]
             digits = p >= POW10_OFFSET_2[idx + 2] ? 0 : mulshiftmod1e9(m2 << 8, mula, mulb, mulc, j + 8)
             if printedDigits != 0

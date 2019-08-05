@@ -322,6 +322,47 @@ end
 
 end # Float32
 
+@testset "Float16" begin
+
+@testset "Basic" begin
+    @test "0e0" == Ryu.write(Float16(0.0))
+    @test "-0e0" == Ryu.write(Float16(-0.0))
+    @test "1e0" == Ryu.write(Float16(1.0))
+    @test "-1e0" == Ryu.write(Float16(-1.0))
+    @test "NaN" == Ryu.write(Float16(NaN))
+    @test "Inf" == Ryu.write(Float16(Inf))
+    @test "-Inf" == Ryu.write(Float16(-Inf))
+end
+
+let x=floatmin(Float16)
+    while x <= floatmax(Float16)
+        @test parse(Float16, Ryu.write(x)) == x
+        x = nextfloat(x)
+    end
+end
+
+# function testfloats(T)
+#     x = floatmin(T)
+#     i = 0
+#     fails = 0
+#     success = 0
+#     while x < floatmax(T)
+#         test = parse(T, Ryu.write(x)) == x
+#         if !test
+#             println("failure: $x != $(Ryu.write(x))")
+#             fails += 1
+#         else
+#             success += 1
+#         end
+#         x = nextfloat(x)
+#         i += 1
+#         i % 1000000 == 0 && println("i = $i, x = $x")
+#     end
+#     return fails / (fails + success)
+# end
+
+end # Float16
+
 @testset "Ryu.writefixed" begin
     @testset "Basic" begin
         @test Ryu.writefixed(todouble(false, 1234, 99999), 0) ==
