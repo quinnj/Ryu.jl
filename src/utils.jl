@@ -1,3 +1,9 @@
+const MANTISSA_MASK = 0x000fffffffffffff
+const EXP_MASK = 0x00000000000007ff
+
+memcpy(d, doff, s, soff, n) = ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Int), d + doff - 1, s + soff - 1, n)
+memmove(d, doff, s, soff, n) = ccall(:memmove, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Int), d + doff - 1, s + soff - 1, n)
+
 uint(x::Float16) = Core.bitcast(UInt16, x)
 uint(x::Float32) = Core.bitcast(UInt32, x)
 uint(x::Float64) = Core.bitcast(UInt64, x)
@@ -14,15 +20,15 @@ bias(::Type{Float16}) = 15
 bias(::Type{Float32}) = 127
 bias(::Type{Float64}) = 1023
 
-pow5_bitcount(::Type{Float16}) = 30 # ??
+pow5_bitcount(::Type{Float16}) = 30
 pow5_bitcount(::Type{Float32}) = 61
 pow5_bitcount(::Type{Float64}) = 121
 
-pow5_inv_bitcount(::Type{Float16}) = 30 # ??
+pow5_inv_bitcount(::Type{Float16}) = 30
 pow5_inv_bitcount(::Type{Float32}) = 59
 pow5_inv_bitcount(::Type{Float64}) = 122
 
-qinvbound(::Type{Float16}) = 4 # or 3
+qinvbound(::Type{Float16}) = 4
 qinvbound(::Type{Float32}) = 9
 qinvbound(::Type{Float64}) = 21
 
@@ -33,12 +39,11 @@ qbound(::Type{Float64}) = 63
 log10pow2(e) = (e * 78913) >> 18
 log10pow5(e) = (e * 732923) >> 20
 pow5bits(e) = ((e * 1217359) >> 19) + 1
-mulshift(m::UInt64, mula, mulb, j) = ((((UInt128(m) * mula) >> 64) + UInt128(m) * mulb) >> (j - 64)) % UInt64
-mulshift(m::UInt32, mul, j) = ((((UInt64(m) * (mul % UInt32)) >> 32) + (UInt64(m) * (mul >> 32))) >> (j - 32)) % UInt32
-mulshift(m::UInt16, mul, j) = ((((UInt32(m) * (mul % UInt16)) >> 16) + (UInt32(m) * (mul >> 16))) >> (j - 16))
+@inline mulshift(m::UInt64, mula, mulb, j) = ((((UInt128(m) * mula) >> 64) + UInt128(m) * mulb) >> (j - 64)) % UInt64
+@inline mulshift(m::UInt32, mul, j) = ((((UInt64(m) * (mul % UInt32)) >> 32) + (UInt64(m) * (mul >> 32))) >> (j - 32)) % UInt32
+@inline mulshift(m::UInt16, mul, j) = ((((UInt32(m) * (mul % UInt16)) >> 16) + (UInt32(m) * (mul >> 16))) >> (j - 16))
 indexforexp(e) = div(e + 15, 16)
 pow10bitsforindex(idx) = 16 * idx + 120
-# lengthforindex(idx) = div(log10pow2(16 * idx) + 1 + 16 + 8, 9)
 lengthforindex(idx) = div((((16 * idx) * 1292913986) >> 32) + 1 + 16 + 8, 9)
 
 @inline function pow5(x, p)
@@ -323,7 +328,7 @@ bitlength(this) = Base.GMP.MPZ.sizeinbase(this, 2)
 @inline function pow5invsplit(::Type{Float64}, i)
     pow = big(5)^i
     inv = div(big(1) << (bitlength(pow) - 1 + pow5_inv_bitcount(Float64)), pow) + 1
-    return (inv & ((big(1) << 64) - 1), inv >> 64)
+    return (UInt64(inv & ((big(1) << 64) - 1)), UInt64(inv >> 64))
 end
 
 @inline function pow5invsplit(::Type{Float32}, i)
@@ -341,7 +346,7 @@ end
 @inline function pow5split(::Type{Float64}, i)
     pow = big(5)^i
     j = bitlength(pow) - pow5_bitcount(Float64)
-    return ((pow >> j) & ((big(1) << 64) - 1), pow >> (j + 64))
+    return (UInt64((pow >> j) & ((big(1) << 64) - 1)), UInt64(pow >> (j + 64)))
 end
 
 @inline function pow5split(::Type{Float32}, i)
