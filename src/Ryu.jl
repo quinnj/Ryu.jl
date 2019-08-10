@@ -17,27 +17,23 @@ end
 
 function writefixed(x::T, precision) where {T <: Base.IEEEFloat}
     buf = Vector{UInt8}(undef, precision + shortestdigits(T))
-    pos = writefixed(x, precision, buf, 1)
+    pos = writefixed(buf, 1, x, false, false, false, precision)
     return unsafe_string(pointer(buf), pos-1)
 end
 
 function writeexp(x::T, precision) where {T <: Base.IEEEFloat}
     buf = Vector{UInt8}(undef, precision + shortestdigits(T))
-    pos = writeexp(x, precision, buf, 1)
+    pos = writeexp(buf, 1, x, false, false, false, precision)
     return unsafe_string(pointer(buf), pos-1)
 end
 
 function Base.show(io::IO, x::T) where {T <: Base.IEEEFloat}
     if get(io, :compact, false)
-        precision = T == Float16 ? 5 : 6
-        buf = Vector{UInt8}(undef, precision + shortestdigits(T))
-        pos = writefixed(x, precision, buf, 1)
-        GC.@preserve buf unsafe_write(io, pointer(buf), pos - 1)
-    else
-        buf = Vector{UInt8}(undef, shortestdigits(T))
-        pos = writeshortest(x, buf, 1)
-        GC.@preserve buf unsafe_write(io, pointer(buf), pos - 1)
+        x = round(x, sigdigits=5)
     end
+    buf = Vector{UInt8}(undef, shortestdigits(T))
+    pos = writeshortest(x, buf, 1)
+    GC.@preserve buf unsafe_write(io, pointer(buf), pos - 1)
     return
 end
 

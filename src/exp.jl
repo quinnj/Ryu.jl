@@ -1,4 +1,6 @@
-@inline function writeexp(v::T, precision, buf, pos) where {T <: Base.IEEEFloat}
+@inline function writeexp(buf, pos, v::T,
+    plus=false, space=false, hash=false,
+    precision=-1, expchar=UInt8('e'), decchar=UInt8('.')) where {T <: Base.IEEEFloat}
     x = Float64(v)
     neg = signbit(x)
     # special cases
@@ -6,18 +8,27 @@
         if neg
             buf[pos] = UInt8('-')
             pos += 1
+        elseif plus
+            buf[pos] = UInt8('+')
+            pos += 1
+        elseif space
+            buf[pos] = UInt8(' ')
+            pos += 1
         end
         buf[pos] = UInt8('0')
         pos += 1
         if precision > 0
-            buf[pos] = UInt8('.')
+            buf[pos] = decchar
             pos += 1
             for _ = 1:precision
                 buf[pos] = UInt8('0')
                 pos += 1
             end
+        elseif hash
+            buf[pos] = decchar
+            pos += 1
         end
-        buf[pos] = UInt8('e')
+        buf[pos] = expchar
         buf[pos + 1] = UInt8('+')
         buf[pos + 2] = UInt8('0')
         buf[pos + 3] = UInt8('0')
@@ -30,11 +41,18 @@
     elseif !isfinite(x)
         if neg
             buf[pos] = UInt8('-')
+            pos += 1
+        elseif plus
+            buf[pos] = UInt8('+')
+            pos += 1
+        elseif space
+            buf[pos] = UInt8(' ')
+            pos += 1
         end
-        buf[pos + neg] = UInt8('I')
-        buf[pos + neg + 1] = UInt8('n')
-        buf[pos + neg + 2] = UInt8('f')
-        return pos + neg + 3
+        buf[pos] = UInt8('I')
+        buf[pos + 1] = UInt8('n')
+        buf[pos + 2] = UInt8('f')
+        return pos + 3
     end
 
     bits = Core.bitcast(UInt64, x)
@@ -52,6 +70,12 @@
     precision += 1
     if neg
         buf[pos] = UInt8('-')
+        pos += 1
+    elseif plus
+        buf[pos] = UInt8('+')
+        pos += 1
+    elseif space
+        buf[pos] = UInt8(' ')
         pos += 1
     end
     digits = 0
@@ -81,10 +105,14 @@
                     break
                 end
                 if precision > 1
-                    pos = append_d_digits(availableDigits, digits, buf, pos)
+                    pos = append_d_digits(availableDigits, digits, buf, pos, decchar)
                 else
                     buf[pos] = UInt8('0') + digits
                     pos += 1
+                    if hash
+                        buf[pos] = decchar
+                        pos += 1
+                    end
                 end
                 printedDigits = availableDigits
                 availableDigits = 0
@@ -98,9 +126,12 @@
         while i < 200
             j = 120 + (-e2 - 16 * idx)
             p = POW10_OFFSET_2[idx + 1] + i - MIN_BLOCK_2[idx + 1]
-            # @show i, p, pos
-            #=@inbounds=# mula, mulb, mulc = POW10_SPLIT_2[p + 1]
-            digits = p >= POW10_OFFSET_2[idx + 2] ? 0 : mulshiftmod1e9(m2 << 8, mula, mulb, mulc, j + 8)
+            if p >= POW10_OFFSET_2[idx + 2]
+                digits = 0
+            else
+                #=@inbounds=# mula, mulb, mulc = POW10_SPLIT_2[p + 1]
+                digits = mulshiftmod1e9(m2 << 8, mula, mulb, mulc, j + 8)
+            end
             if printedDigits != 0
                 if printedDigits + 9 > precision
                     availableDigits = 9
@@ -115,10 +146,14 @@
                     break
                 end
                 if precision > 1
-                    pos = append_d_digits(availableDigits, digits, buf, pos)
+                    pos = append_d_digits(availableDigits, digits, buf, pos, decchar)
                 else
                     buf[pos] = UInt8('0') + digits
                     pos += 1
+                    if hash
+                        buf[pos] = decchar
+                        pos += 1
+                    end
                 end
                 printedDigits = availableDigits
                 availableDigits = 0
@@ -162,10 +197,14 @@
         end
     else
         if precision > 1
-            pos = append_d_digits(maximum, digits, buf, pos)
+            pos = append_d_digits(maximum, digits, buf, pos, decchar)
         else
             buf[pos] = UInt8('0') + digits
             pos += 1
+            if hash
+                buf[pos] = decchar
+                pos += 1
+            end
         end
     end
     if roundUp != 0
@@ -178,7 +217,7 @@
                 break
             end
             c = roundPos > 0 ? buf[roundPos] : 0x00
-            if c == UInt8('.')
+            if c == decchar
                 continue
             elseif c == UInt8('9')
                 buf[roundPos] = UInt8('0')
@@ -193,7 +232,7 @@
             end
         end
     end
-    buf[pos] = UInt8('e')
+    buf[pos] = expchar
     pos += 1
     if e < 0
         buf[pos] = UInt8('-')
