@@ -1,14 +1,35 @@
-@inline function writeshortest(x::T, buf::Vector{UInt8}, pos) where {T}
+@inline function writeshortest(buf::Vector{UInt8}, pos, x::T,
+    plus=false, space=false, hash=true,
+    precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.')) where {T}
     neg = signbit(x)
     # special cases
-    @inbounds if x == 0
+    if x == 0
         if neg
             buf[pos] = UInt8('-')
+            pos += 1
+        elseif plus
+            buf[pos] = UInt8('+')
+            pos += 1
+        elseif space
+            buf[pos] = UInt8(' ')
+            pos += 1
         end
-        buf[pos + neg] = UInt8('0')
-        buf[pos + neg + 1] = UInt8('.')
-        buf[pos + neg + 2] = UInt8('0')
-        return pos + neg + 3
+        buf[pos] = UInt8('0')
+        pos += 1
+        if hash
+            buf[pos] = decchar
+            pos += 1
+        end
+        if precision == -1
+            buf[pos] = UInt8('0')
+            return pos + 1
+        end
+        while precision > 1
+            buf[pos] = UInt8('0')
+            pos += 1
+            precision -= 1
+        end
+        return pos
     elseif isnan(x)
         buf[pos] = UInt8('N')
         buf[pos + 1] = UInt8('a')
@@ -55,7 +76,7 @@
             if T == Float32 || T == Float16
                 if q != 0 && div(vp - 1, 10) <= div(vm, 10)
                     l = pow5_inv_bitcount(T) + pow5bits(q - 1) - 1
-                    @inbounds mul = T == Float32 ? FLOAT_POW5_INV_SPLIT[q] : HALF_POW5_INV_SPLIT[q]
+                    mul = T == Float32 ? FLOAT_POW5_INV_SPLIT[q] : HALF_POW5_INV_SPLIT[q]
                     lastRemovedDigit = (mulshift(mv, mul, -e2 + q - 1 + l) % 10) % UInt8
                 end
             end
@@ -78,7 +99,7 @@
             if T == Float32 || T == Float16
                 if q != 0 && div(vp - 1, 10) <= div(vm, 10)
                     j = q - 1 - (pow5bits(i + 1) - pow5_bitcount(T))
-                    @inbounds mul = T == Float32 ? FLOAT_POW5_SPLIT[i + 2] : HALF_POW5_SPLIT[i + 2]
+                    mul = T == Float32 ? FLOAT_POW5_SPLIT[i + 2] : HALF_POW5_SPLIT[i + 2]
                     lastRemovedDigit = (mulshift(mv, mul, j) % 10) % UInt8
                 end
             end
@@ -171,27 +192,35 @@
     end
 
     if neg
-        @inbounds buf[pos] = UInt8('-')
+        buf[pos] = UInt8('-')
+        pos += 1
+    elseif plus
+        buf[pos] = UInt8('+')
+        pos += 1
+    elseif space
+        buf[pos] = UInt8(' ')
         pos += 1
     end
-    olength = decimallength(output)
 
+    olength = decimallength(output)
     exp_form = true
     pt = nexp + olength
-    if -4 < pt < 6 && !(pt >= olength && abs(mod(x + 0.05, 10^(pt - olength)) - 0.05) > 0.05)
+    prec = precision
+    if -4 <= pt < (precision == -1 ? 6 : precision) #&& !(pt >= olength && abs(mod(x + 0.05, 10^(pt - olength)) - 0.05) > 0.05)
         exp_form = false
-        # print out digits and decimal point fully
-        if nexp >= 0
-            buf[pos + nexp + olength] = UInt8('.')
-            buf[pos + nexp + olength + 1] = UInt8('0')
-        elseif abs(nexp) >= olength
+        if pt <= 0
             buf[pos] = UInt8('0')
-            buf[pos + 1] = UInt8('.')
-            pos += 2
-            for _ = 1:(abs(nexp) - olength)
+            pos += 1
+            buf[pos] = decchar
+            pos += 1
+            for _ = 1:abs(pt)
                 buf[pos] = UInt8('0')
                 pos += 1
             end
+        # elseif pt >= olength
+            # nothing to do at this point
+        # else
+            # nothing to do at this point
         end
     else
         pos += 1
@@ -235,53 +264,96 @@
     end
     if output2 >= 10
         c = output2 << 1
-        #=@inbounds=# buf[pos + 1] = DIGIT_TABLE[c + 2]
-        #=@inbounds=# buf[pos - exp_form] = DIGIT_TABLE[c + 1]
+        buf[pos + 1] = DIGIT_TABLE[c + 2]
+        buf[pos - exp_form] = DIGIT_TABLE[c + 1]
     else
-        #=@inbounds=# buf[pos - exp_form] = UInt8('0') + (output2 % UInt8)
+        buf[pos - exp_form] = UInt8('0') + (output2 % UInt8)
     end
 
     if !exp_form
-        if nexp >= 0
+        if pt <= 0
             pos += olength
+            precision -= olength
+            while hash && precision > 0
+                buf[pos] = UInt8('0')
+                pos += 1
+                precision -= 1
+            end
+        elseif pt >= olength
+            pos += olength
+            precision -= olength
             for _ = 1:nexp
                 buf[pos] = UInt8('0')
                 pos += 1
+                precision -= 1
             end
-            pos += 2
-        elseif olength > abs(nexp)
+            if hash
+                buf[pos] = decchar
+                pos += 1
+                if precision < 0
+                    buf[pos] = UInt8('0')
+                    pos += 1
+                end
+                while precision > 0
+                    buf[pos] = UInt8('0')
+                    pos += 1
+                    precision -= 1
+                end
+            end
+        else
             pointoff = olength - abs(nexp)
             memmove(ptr, pos + pointoff + 1, ptr, pos + pointoff, olength - pointoff + 1)
-            buf[pos + pointoff] = UInt8('.')
+            buf[pos + pointoff] = decchar
             pos += olength + 1
-        else
-            pos += olength
+            precision -= olength
+            while hash && precision > 0
+                buf[pos] = UInt8('0')
+                pos += 1
+                precision -= 1
+            end
         end
     else
-        if olength > 1
-            #=@inbounds=# buf[pos] = UInt8('.')
+        if olength > 1 || hash
+            buf[pos] = decchar
             pos += olength
+            precision -= olength
+        end
+        if hash && olength == 1
+            buf[pos] = UInt8('0')
+            pos += 1
+        end
+        while hash && precision > 0
+            buf[pos] = UInt8('0')
+            pos += 1
+            precision -= 1
         end
 
-        #=@inbounds=# buf[pos] = UInt8('e')
+        buf[pos] = expchar
         pos += 1
         exp2 = nexp + olength - 1
         if exp2 < 0
-            #=@inbounds=# buf[pos] = UInt8('-')
+            buf[pos] = UInt8('-')
             pos += 1
             exp2 = -exp2
+        elseif padexp
+            buf[pos] = UInt8('+')
+            pos += 1
         end
 
         if exp2 >= 100
             c = exp2 % 10
             memcpy(ptr, pos, ptr2, 2 * div(exp2, 10) + 1, 2)
-            #=@inbounds=# buf[pos + 2] = UInt8('0') + (c % UInt8)
+            buf[pos + 2] = UInt8('0') + (c % UInt8)
             pos += 3
         elseif exp2 >= 10
             memcpy(ptr, pos, ptr2, 2 * exp2 + 1, 2)
             pos += 2
         else
-            #=@inbounds=# buf[pos] = UInt8('0') + (exp2 % UInt8)
+            if padexp
+                buf[pos] = UInt8('0')
+                pos += 1
+            end
+            buf[pos] = UInt8('0') + (exp2 % UInt8)
             pos += 1
         end
     end

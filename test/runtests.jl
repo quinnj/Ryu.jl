@@ -23,7 +23,7 @@ end
 
 @testset "MinAndMax" begin
     @test "1.7976931348623157e308" == Ryu.writeshortest(Core.bitcast(Float64, 0x7fefffffffffffff))
-    @test "5e-324" == Ryu.writeshortest(Core.bitcast(Float64, 1))
+    @test "5.0e-324" == Ryu.writeshortest(Core.bitcast(Float64, 1))
 end
 
 @testset "LotsOfTrailingZeros" begin
@@ -157,17 +157,17 @@ end
     @test "100.0" == Ryu.writeshortest(1.0e+2)
     @test "1000.0" == Ryu.writeshortest(1.0e+3)
     @test "10000.0" == Ryu.writeshortest(1.0e+4)
-    @test "1e5" == Ryu.writeshortest(1.0e+5)
-    @test "1e6" == Ryu.writeshortest(1.0e+6)
-    @test "1e7" == Ryu.writeshortest(1.0e+7)
-    @test "1e8" == Ryu.writeshortest(1.0e+8)
-    @test "1e9" == Ryu.writeshortest(1.0e+9)
-    @test "1e10" == Ryu.writeshortest(1.0e+10)
-    @test "1e11" == Ryu.writeshortest(1.0e+11)
-    @test "1e12" == Ryu.writeshortest(1.0e+12)
-    @test "1e13" == Ryu.writeshortest(1.0e+13)
-    @test "1e14" == Ryu.writeshortest(1.0e+14)
-    @test "1e15" == Ryu.writeshortest(1.0e+15)
+    @test "1.0e5" == Ryu.writeshortest(1.0e+5)
+    @test "1.0e6" == Ryu.writeshortest(1.0e+6)
+    @test "1.0e7" == Ryu.writeshortest(1.0e+7)
+    @test "1.0e8" == Ryu.writeshortest(1.0e+8)
+    @test "1.0e9" == Ryu.writeshortest(1.0e+9)
+    @test "1.0e10" == Ryu.writeshortest(1.0e+10)
+    @test "1.0e11" == Ryu.writeshortest(1.0e+11)
+    @test "1.0e12" == Ryu.writeshortest(1.0e+12)
+    @test "1.0e13" == Ryu.writeshortest(1.0e+13)
+    @test "1.0e14" == Ryu.writeshortest(1.0e+14)
+    @test "1.0e15" == Ryu.writeshortest(1.0e+15)
 
   # 10^15 + 10^i
     @test "1.000000000000001e15" == Ryu.writeshortest(1.0e+15 + 1.0e+0)
@@ -240,14 +240,14 @@ end
 
 @testset "MinAndMax" begin
     @test "3.4028235e38" == Ryu.writeshortest(Core.bitcast(Float32, 0x7f7fffff))
-    @test "1e-45" == Ryu.writeshortest(Core.bitcast(Float32, Int32(1)))
+    @test "1.0e-45" == Ryu.writeshortest(Core.bitcast(Float32, Int32(1)))
 end
 
 # Check that we return the exact boundary if it is the shortest
 # representation, but only if the original floating point number is even.
 @testset "BoundaryRoundeven" begin
     @test "3.355445e7" == Ryu.writeshortest(3.355445f7)
-    @test "9e9" == Ryu.writeshortest(8.999999f9)
+    @test "9.0e9" == Ryu.writeshortest(8.999999f9)
     @test "3.436672e10" == Ryu.writeshortest(3.4366717f10)
 end
 
@@ -284,7 +284,7 @@ end
     @test "7.038531e-26" == Ryu.writeshortest(7.0385309f-26)
     @test "9.223404e17" == Ryu.writeshortest(9.2234038f17)
     @test "6.710887e7" == Ryu.writeshortest(6.7108872f7)
-    @test "1e-44" == Ryu.writeshortest(1.0f-44)
+    @test "1.0e-44" == Ryu.writeshortest(1.0f-44)
     @test "2.816025e14" == Ryu.writeshortest(2.816025f14)
     @test "9.223372e18" == Ryu.writeshortest(9.223372f18)
     @test "1.5846086e29" == Ryu.writeshortest(1.5846085f29)
@@ -292,7 +292,7 @@ end
     @test "5.368709e18" == Ryu.writeshortest(5.368709f18)
     @test "4.6143166e18" == Ryu.writeshortest(4.6143165f18)
     @test "0.007812537" == Ryu.writeshortest(0.007812537f0)
-    @test "1e-45" == Ryu.writeshortest(1.4f-45)
+    @test "1.0e-45" == Ryu.writeshortest(1.4f-45)
     @test "1.18697725e20" == Ryu.writeshortest(1.18697724f20)
     @test "1.00014165e-36" == Ryu.writeshortest(1.00014165f-36)
     @test "200.0" == Ryu.writeshortest(200f0)
@@ -737,11 +737,3 @@ end
 end # exp
 
 end # Ryu
-
-
-buffer = Base.Grisu.getbuf()
-bignums = Base.Grisu.BIGNUMS[Threads.threadid()]
-Base.Grisu.grisu(1.23456735e-36, Base.Grisu.SHORTEST, 0, buffer, bignums)
-
-# x = 1.23456735e-36
-# Ryu.writeshortest(x, buffer, 1)

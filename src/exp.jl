@@ -1,10 +1,10 @@
 @inline function writeexp(buf, pos, v::T,
     plus=false, space=false, hash=false,
-    precision=-1, expchar=UInt8('e'), decchar=UInt8('.')) where {T <: Base.IEEEFloat}
+    precision=-1, expchar=UInt8('e'), decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
     x = Float64(v)
     neg = signbit(x)
     # special cases
-    @inbounds if x == 0
+    if x == 0
         if neg
             buf[pos] = UInt8('-')
             pos += 1
@@ -230,6 +230,14 @@
                 buf[roundPos] = c + 1
                 break
             end
+        end
+    end
+    if trimtrailingzeros
+        while buf[pos - 1] == UInt8('0')
+            pos -= 1
+        end
+        if buf[pos - 1] == decchar && !hash
+            pos -= 1
         end
     end
     buf[pos] = expchar

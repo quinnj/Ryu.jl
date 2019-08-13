@@ -4,7 +4,7 @@
     x = Float64(v)
     neg = signbit(x)
     # special cases
-    @inbounds if x == 0
+    if x == 0
         if neg
             buf[pos] = UInt8('-')
             pos += 1
@@ -201,8 +201,8 @@
         while buf[pos - 1] == UInt8('0')
             pos -= 1
         end
-        if buf[pos - 1] == decchar
-            pos += 1
+        if buf[pos - 1] == decchar && !hash
+            pos -= 1
         end
     end
     return pos
