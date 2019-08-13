@@ -138,7 +138,7 @@ end
     @test "123.0" == Ryu.writeshortest(1.23e+2)
     @test "1234.0" == Ryu.writeshortest(1.234e+3)
     @test "12345.0" == Ryu.writeshortest(1.2345e+4)
-    @test "1.23456e5" == Ryu.writeshortest(1.23456e+5)
+    @test "123456.0" == Ryu.writeshortest(1.23456e+5)
     @test "1.234567e6" == Ryu.writeshortest(1.234567e+6)
     @test "1.2345678e7" == Ryu.writeshortest(1.2345678e+7)
     @test "1.23456789e8" == Ryu.writeshortest(1.23456789e+8)
@@ -157,7 +157,7 @@ end
     @test "100.0" == Ryu.writeshortest(1.0e+2)
     @test "1000.0" == Ryu.writeshortest(1.0e+3)
     @test "10000.0" == Ryu.writeshortest(1.0e+4)
-    @test "1.0e5" == Ryu.writeshortest(1.0e+5)
+    @test "100000.0" == Ryu.writeshortest(1.0e+5)
     @test "1.0e6" == Ryu.writeshortest(1.0e+6)
     @test "1.0e7" == Ryu.writeshortest(1.0e+7)
     @test "1.0e8" == Ryu.writeshortest(1.0e+8)
@@ -192,7 +192,7 @@ end
     @test "512.0" == Ryu.writeshortest(512.0)
     @test "8192.0" == Ryu.writeshortest(8192.0)
     @test "65536.0" == Ryu.writeshortest(65536.0)
-    @test "5.24288e5" == Ryu.writeshortest(524288.0)
+    @test "524288.0" == Ryu.writeshortest(524288.0)
     @test "8.388608e6" == Ryu.writeshortest(8388608.0)
     @test "6.7108864e7" == Ryu.writeshortest(67108864.0)
     @test "5.36870912e8" == Ryu.writeshortest(536870912.0)
@@ -207,7 +207,7 @@ end
   # 1000 * (Largest power of 2 <= 10^(i+1))
     @test "8000.0" == Ryu.writeshortest(8.0e+3)
     @test "64000.0" == Ryu.writeshortest(64.0e+3)
-    @test "5.12e5" == Ryu.writeshortest(512.0e+3)
+    @test "512000.0" == Ryu.writeshortest(512.0e+3)
     @test "8.192e6" == Ryu.writeshortest(8192.0e+3)
     @test "6.5536e7" == Ryu.writeshortest(65536.0e+3)
     @test "5.24288e8" == Ryu.writeshortest(524288.0e+3)
@@ -255,7 +255,7 @@ end
 # then we round to even. It seems like this only makes a difference if the
 # last two digits are ...2|5 or ...7|5, and we cut off the 5.
 @testset "exactValueRoundeven" begin
-    @test "3.0540412e5" == Ryu.writeshortest(3.0540412f5)
+    @test "305404.12" == Ryu.writeshortest(3.0540412f5)
     @test "8099.0312" == Ryu.writeshortest(8.0990312f3)
 end
 
