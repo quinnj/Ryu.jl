@@ -6,7 +6,7 @@ todouble(sign, exp, mant) = Core.bitcast(Float64, (UInt64(sign) << 63) | (UInt64
 @testset "Ryu" begin
 
 @testset "Float64" begin
-println("here")
+
 @testset "Basic" begin
     @test Ryu.writeshortest(0.0) == "0.0"
     @test Ryu.writeshortest(-0.0) == "-0.0"
@@ -29,7 +29,7 @@ end
 @testset "LotsOfTrailingZeros" begin
     @test "2.9802322387695312e-8" == Ryu.writeshortest(2.98023223876953125e-8)
 end
-println("here 2")
+
 @testset "Regression" begin
     @test "-2.109808898695963e16" == Ryu.writeshortest(-2.109808898695963e16)
     @test "4.940656e-318" == Ryu.writeshortest(4.940656e-318)
@@ -76,7 +76,7 @@ end
     @test "4.294967297" == Ryu.writeshortest(4.294967297) # 2^32 +
     @test "4.294967298" == Ryu.writeshortest(4.294967298) # 2^32 +
 end
-println("here 3")
+
 # Test min, max shift values in shiftright128
 @testset "MinMaxShift" begin
     # 32-bit opt-size=0:  49 <= dist <= 50
@@ -221,7 +221,7 @@ end
 end
 
 end # Float64
-println("here4")
+
 @testset "Float32" begin
 
 @testset "Basic" begin
@@ -298,7 +298,7 @@ end
     @test "200.0" == Ryu.writeshortest(200f0)
     @test "3.3554432e7" == Ryu.writeshortest(3.3554432f7)
 end
-println("here5")
+
 @testset "LooksLikePow5" begin
     # These numbers have a mantissa that is the largest power of 5 that fits,
     # and an exponent that causes the computation for q to result in 10, which is a corner
@@ -321,7 +321,7 @@ end
 end
 
 end # Float32
-println("here6")
+
 @testset "Float16" begin
 
 @testset "Basic" begin
@@ -349,20 +349,20 @@ end
 #     while x < floatmax(T)
 #         test = parse(T, Ryu.writeshortest(x)) == x
 #         if !test
-#             println("failure: $x != $(Ryu.writeshortest(x))")
+
 #             fails += 1
 #         else
 #             success += 1
 #         end
 #         x = nextfloat(x)
 #         i += 1
-#         i % 1000000 == 0 && println("i = $i, x = $x")
+
 #     end
 #     return fails / (fails + success)
 # end
 
 end # Float16
-println("here7")
+
 @testset "Ryu.writefixed" begin
     @testset "Basic" begin
         @test Ryu.writefixed(todouble(false, 1234, 99999), 0) ==
@@ -543,7 +543,7 @@ println("here7")
     end
 
 end # fixed
-println("here8")
+
 @testset "Ryu.writeexp" begin
 
 @testset "Basic" begin
