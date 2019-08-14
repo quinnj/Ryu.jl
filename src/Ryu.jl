@@ -34,9 +34,10 @@ function writeshortest(x::T,
         expchar::UInt8=UInt8('e'),
         padexp::Bool=false,
         decchar::UInt8=UInt8('.')) where {T <: Base.IEEEFloat}
-    buf = Vector{UInt8}(undef, neededdigits(T))
+    buf = Base.StringVector(neededdigits(T))
     pos = writeshortest(buf, 1, x)
-    return unsafe_string(pointer(buf), pos-1)
+    @assert pos - 1 <= length(buf)
+    return String(resize!(buf, pos - 1))
 end
 
 """
@@ -55,9 +56,10 @@ Various options for the output format include:
   * `decchar`: decimal point character to be used
 """
 function writefixed(x::T, precision) where {T <: Base.IEEEFloat}
-    buf = Vector{UInt8}(undef, precision + neededdigits(T))
+    buf = Base.StringVector(precision + neededdigits(T))
     pos = writefixed(buf, 1, x, false, false, false, precision)
-    return unsafe_string(pointer(buf), pos-1)
+    @assert pos - 1 <= length(buf)
+    return String(resize!(buf, pos - 1))
 end
 
 """
@@ -77,18 +79,20 @@ Various options for the output format include:
   * `decchar`: decimal point character to be used
 """
 function writeexp(x::T, precision) where {T <: Base.IEEEFloat}
-    buf = Vector{UInt8}(undef, precision + neededdigits(T))
+    buf = Base.StringVector(precision + neededdigits(T))
     pos = writeexp(buf, 1, x, false, false, false, precision)
-    return unsafe_string(pointer(buf), pos-1)
+    @assert pos - 1 <= length(buf)
+    return String(resize!(buf, pos - 1))
 end
 
 function Base.show(io::IO, x::T) where {T <: Base.IEEEFloat}
     if get(io, :compact, false)
         x = round(x, sigdigits=6)
     end
-    buf = Vector{UInt8}(undef, neededdigits(T))
+    buf = Base.StringVector(neededdigits(T))
     pos = writeshortest(buf, 1, x)
-    GC.@preserve buf unsafe_write(io, pointer(buf), pos - 1)
+    @assert pos - 1 <= length(buf)
+    write(io, resize!(buf, pos - 1))
     return
 end
 
