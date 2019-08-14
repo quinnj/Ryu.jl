@@ -47,9 +47,8 @@
 
     bits = uint(x)
     mant = bits & (oftype(bits, 1) << mantissabits(T) - oftype(bits, 1))
-    exp = Int((bits >> mantissabits(T)) & ((1 << exponentbits(T)) - 1))
-
-    m2 = oftype(bits, 1 << mantissabits(T)) | mant
+    exp = Int((bits >> mantissabits(T)) & ((Int64(1) << exponentbits(T)) - 1))
+    m2 = oftype(bits, Int64(1) << mantissabits(T)) | mant
     e2 = exp - bias(T) - mantissabits(T)
     fraction = m2 & ((oftype(bits, 1) << -e2) - 1)
     if e2 > 0 || e2 < -52 || fraction != 0

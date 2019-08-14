@@ -64,7 +64,7 @@
         m2 = mant
     else
         e2 = exp - 1023 - 52
-        m2 = (1 << 52) | mant
+        m2 = (Int64(1) << 52) | mant
     end
     nonzero = false
     precision += 1

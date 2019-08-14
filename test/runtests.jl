@@ -23,7 +23,7 @@ end
 
 @testset "MinAndMax" begin
     @test "1.7976931348623157e308" == Ryu.writeshortest(Core.bitcast(Float64, 0x7fefffffffffffff))
-    @test "5.0e-324" == Ryu.writeshortest(Core.bitcast(Float64, 1))
+    @test "5.0e-324" == Ryu.writeshortest(Core.bitcast(Float64, Int64(1)))
 end
 
 @testset "LotsOfTrailingZeros" begin

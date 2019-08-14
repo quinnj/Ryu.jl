@@ -44,7 +44,7 @@ pow5bits(e) = ((e * 1217359) >> 19) + 1
 @inline mulshift(m::UInt16, mul, j) = ((((UInt32(m) * (mul % UInt16)) >> 16) + (UInt32(m) * (mul >> 16))) >> (j - 16))
 indexforexp(e) = div(e + 15, 16)
 pow10bitsforindex(idx) = 16 * idx + 120
-lengthforindex(idx) = div((((16 * idx) * 1292913986) >> 32) + 1 + 16 + 8, 9)
+lengthforindex(idx) = div(((Int64(16 * idx) * 1292913986) >> 32) + 1 + 16 + 8, 9)
 
 @inline function pow5(x, p)
     count = 0
@@ -57,7 +57,7 @@ lengthforindex(idx) = div((((16 * idx) * 1292913986) >> 32) + 1 + 16 + 8, 9)
     end
 end
 
-pow2(x, p) = (x & ((1 << p) - 1)) == 0
+pow2(x, p) = (x & ((Int64(1) << p) - 1)) == 0
 
 @inline function decimallength(v)
     v >= 10000000000000000 && return 17
